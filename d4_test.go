@@ -4,15 +4,31 @@ import (
     "testing"
     "time"
     "fmt"
+    "os"
+    "bufio"
 )
 
 func test(t *testing.T, code string, expect []float64, iterations int) *Machine {
     machine := CompileString(code, 22050)
+    return test_machine(t, machine, expect, iterations)
+}
+
+func test_file(t *testing.T, filename string, expect []float64, iterations int) *Machine {
+    opened_file, err := os.OpenFile(filename, os.O_RDONLY, 0755)
+    if err != nil {
+        panic(err)
+    }
+    in := bufio.NewReader( opened_file )
+    machine := Compile(in, 22050)
+    return test_machine(t, machine, expect, iterations)
+}
+
+func test_machine(t *testing.T, machine *Machine, expect []float64, iterations int) *Machine {
     result := machine.Run(false)
 
     for i, result_i := range result {    
         if result_i != expect[i] {
-            t.Errorf("%s failed: result %f, want %f", code, result, expect)
+            t.Errorf("result %f, want %f", result, expect)
             break
         }   
     }
@@ -22,7 +38,9 @@ func test(t *testing.T, code string, expect []float64, iterations int) *Machine 
         for i := 1; i <= iterations; i++ {
             _ = machine.Run(false)
         }
-        fmt.Printf("%d iterations took %s\n", iterations, time.Since(then))
+        elapsed := time.Since(then)
+        fmt.Printf("%d iterations took %s (%d kHz)\n", iterations, elapsed,
+            (int64(iterations) * 1000000 / elapsed.Nanoseconds()))
     }
 
     return machine
@@ -64,6 +82,14 @@ func TestSwap(t *testing.T) {
     _ = test( t, 
               "47 21 SWAP",
               []float64{21, 47},
+              1000,
+    )
+}
+
+func TestLoopTune(t *testing.T) {
+    _ = test_file( t, 
+              "tests/loop-tune.d4",
+              []float64{0},
               1000,
     )
 }
