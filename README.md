@@ -68,7 +68,7 @@ They are not evaluated again.
 
 ## Extra words
 
-* **TODO** `X`, backtick, `NOOP` : noop
+* **TODO** `.`, `NOOP` : noop
 
 * **TODO** `AGO` ( variable_name time -- value ) : return the value the named `VARIABLE` ended up with after the iteration the specified time ago.
 

@@ -27,4 +27,8 @@
     5 beats quaver ON IF A clav THEN
 ;
 
-0 2 bar* T 4 bar* MOD ON IF a_tune ELSE d_tune THEN
+:MAIN
+    0 2 bar* T 4 bar* MOD ON IF a_tune ELSE d_tune THEN
+;
+
+LOOP MAIN
