@@ -38,6 +38,7 @@ They are not evaluated again.
 
 **TODO** These values can be accessed in later iterations using `AGO`.
 
+The word `.` pops the value off the top of the stack and adds it to an output stack ready to be returned.
 
 ## Standard Forth words
 
@@ -74,7 +75,7 @@ They are not evaluated again.
 
 * **TODO** `LAST` ( variable_name -- value ) : return the value the named `VARIABLE` ended up with in the previous iteration.
 
-* `T` : iteration number (use `S`, `BPM`, `HZ` to convert to seconds)
+* **TODO** `T` : iteration number (use `S`, `BPM`, `HZ` to convert to seconds)
 
 * `ON` ( schedule_t, duration, base_t -- 0 or age, 1 ) : Is the note of length `duration` scheduled for `schedule_t` currently in progress at time `base_t`, and if so, how old is it?
 
@@ -92,11 +93,13 @@ They are not evaluated again.
 
 * `SAW` ( freq -- pcm ) : Sawtooth oscillator
 
-* **TODO** `PULSE` ( freq width -- pcm ) : Pulse wave oscillator
+* `PULSE` ( freq width -- pcm ) : Pulse wave oscillator
 
 * `SQ` ( freq -- pcm ) === `0.5 PULSE` : Square wave oscillator
 
-* **TODO** `TR` ( freq -- pcm ) : Triangle wave oscillator
+* `TR` ( freq -- pcm ) : Triangle wave oscillator* 
 
+* `CLIP` ( n ) : When outputting to a buffer (sound hardware...), scale the results down by this factor.
 
+    _example_ `A SIN C SIN 2 CLIP` will scale down the 2 notes so they fit into -1...+1
 
