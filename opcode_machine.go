@@ -16,22 +16,30 @@ const M_COMMENT = 4
 const M_IF_FALSE = 5
 
 type OpcodeMachine struct {
-    iter int
-    sampleRate float64
+    MachineData
     step float64
-    clip float64
     code []float64
     words map[string][]string
     variables map[string][]float64
     constants map[string][]float64
     old_variables []map[string][]float64
+    opcode_info map[float64]Word
 }
 
-func NewOpcodeMachine( sampleRate float64 ) *OpcodeMachine {
-    return &OpcodeMachine{0, sampleRate, 1/(LOOP*sampleRate), 1.0, nil, nil, nil, nil, nil}
+func NewOpcodeMachine( sampleRate float64, clip float64 ) *OpcodeMachine {
+    return &OpcodeMachine{MachineData{0, sampleRate, clip}, 1/(LOOP*sampleRate), nil, nil, nil, nil, nil, nil}
 }
 
-func (m *OpcodeMachine) Init() error {
+func (m *OpcodeMachine) GetData() MachineData {
+    return m.MachineData
+}
+
+func (m *OpcodeMachine) Init(clone_from Machine) error {
+    m.opcode_info = map[float64]Word{}
+    if clone_from != nil {
+        m.MachineData = clone_from.GetData()
+        m.step = 1/(LOOP*m.sampleRate)
+    }
     return nil
 }
 
@@ -112,7 +120,6 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
     }
 
     m.words = words
-    fmt.Println("Words: ",words)
 
     // We now have a set of word definitions (counting '' for everything outside a word definition)
     // which we can translate into opcodes
@@ -123,7 +130,6 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
     code, err = m.compile(code, "", breadcrumb)
     
     m.code = append(code, W_EOF)
-    fmt.Println("Code: ",code)
 
     return err
 }
@@ -149,6 +155,7 @@ func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []strin
             word_info, ok := WORDS[w]
             if ok {
                 code = append(code, word_info.opcode)
+                m.opcode_info[word_info.opcode] = word_info
             } else {
                 new_breadcrumb := append(breadcrumb, word)
                 code, err = m.compile( code, w, new_breadcrumb )
@@ -171,37 +178,41 @@ func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []strin
 }
 
 func (m *OpcodeMachine) Fill32( buf []float32 ) error {
-    for i := range buf {
+    var output []float64
+    var err error
+    var i int
 
-        stack, err := m.Run()
+    for i = range buf {
+
+        output, err = m.Run()
 
         if (err != nil) {
             return err
         }
 
-        /* Add up whatever is left on the stack */
         r := float64(0)
-        for _, s := range stack {
+        for _, s := range output {
             r += s
         }
 
-        /* Tweak the scale if it's clipping */
-        if r > m.clip {
-            m.clip = r
-        }
         buf[i] = float32(r / m.clip)
     }
+    //fmt.Println(output, i)
 
-    return nil
+    return err
 }
 
 func (m *OpcodeMachine) Run() ([]float64, error) {
-    var stack []float64
+
+    output := []float64{}
+    stack := []float64{}
+
     _, phase := math.Modf( float64(m.iter) * m.step )
     m.iter += 1
 
     var err error
     var pop float64
+    var w_info Word
 
     code_ptr := 0
     top := -1
@@ -212,6 +223,10 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     w := m.code[code_ptr]
 
     for w != W_EOF {
+        w_info = m.opcode_info[w]
+        if w_info.needs > top+1 {
+            return output, fmt.Errorf("Runtime error: %s needs %d items on stack, got %s", w_info.name, w_info.needs, stack)
+        }
         switch mode {
             case M_IF_FALSE:
                 switch w {
@@ -232,6 +247,13 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         code_ptr += 1
                         stack = append(stack, m.code[code_ptr])
                         top += 1
+                    case W_OUTPUT:
+                        pop, stack = stack[top], stack[:top]
+                        top -= 1
+                        output = append(output, pop)
+                    case W_CLIP:
+                        pop, stack = stack[top], stack[:top]
+                        m.clip = pop
 
                     /* Forth words */
 
@@ -274,12 +296,23 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         stack[top] *= pop
                     case W_DIVIDE:
                         pop, stack = stack[top], stack[:top]
+                        if pop == 0 {
+                            return output, fmt.Errorf("Runtime error: divide by zero")
+                        }
                         top -= 1
                         stack[top] /= pop
                     case W_MOD:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
                         stack[top] = math.Mod( stack[top], pop )
+
+                    case W_DMOD:
+                        if stack[top] == 0 {
+                            return output, fmt.Errorf("Runtime error: divide by zero")
+                        }
+                        result, remainder := math.Modf( stack[top-1] / stack[top] )
+                        stack[top] = result
+                        stack[top-1] = remainder * pop
         
                     case W_EQUALS:
                         pop, stack = stack[top], stack[:top]
@@ -386,16 +419,17 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                     /* musical words */
 
                     case W_HZ:
-                        stack[top] *= SEC
+                        stack[top] *= SEC * phase
 
                     case W_BPM:
-                        stack[top] *= BPM
+                        stack[top] *= BPM * phase
 
                     case W_S:
                         stack[top] /= SEC
 
                     case W_T:
                         stack = append(stack, phase)
+                        top += 1
 
                     case W_ON:
                         /* (time, length, base -- age, on (if on) OR off (if off) */
@@ -425,21 +459,32 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                     /* oscillators */
 
                     case W_SIN:
-                        stack[top] = math.Sin(stack[top] * phase * 2 * math.Pi)
+                        _, frac := math.Modf(stack[top])
+                        stack[top] = math.Sin(frac * 2 * math.Pi)
 
                     case W_SAW:
-                        stack[top] = math.Mod(stack[top] * phase * 2, 2) - 1
+                        stack[top] = math.Mod(stack[top] * 2, 2) - 1
 
                     case W_TR:
-                        _, frac := math.Modf(stack[top] * phase)
+                        _, frac := math.Modf(stack[top])
                         if frac < 0.5 {
                             stack[top] = frac * 4 - 1
                         } else {
                             stack[top] = 3 - frac * 4
                         }
 
+                    case W_PULSE:
+                        pop, stack = stack[top], stack[:top]
+                        top -= 1
+                        _, frac := math.Modf(stack[top])
+                        if frac < pop {
+                            stack[top] = 1
+                        } else {
+                            stack[top] = -1
+                        }
+
                     case W_SQ:
-                        _, frac := math.Modf(stack[top] * phase)
+                        _, frac := math.Modf(stack[top])
                         if frac < 0.5 {
                             stack[top] = 1
                         } else {
@@ -447,7 +492,7 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         }
 
                     default:
-                        return stack, fmt.Errorf("Runtime error: unknown opcode %d", w)
+                        return output, fmt.Errorf("Runtime error: unknown opcode %d", w)
                 }
         }
         if DEBUG == true {
@@ -460,5 +505,5 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
         fmt.Println("<<",stack)
     }
 
-    return stack, err
+    return output, err
 }

@@ -13,19 +13,22 @@ var SEMITONE = math.Pow(2, 1.0/12)
 var SEC = float64(LOOP)
 var BPM = float64(LOOP / 60)
 
-const DEBUG = true
+const DEBUG = false
 
-func CompileString(in string, sampleRate float64) (Machine, error) {
-    return Compile(strings.NewReader(in), sampleRate)
+func NewMachineString(in string, sampleRate float64, clip float64) (Machine, error) {
+    return NewMachine(strings.NewReader(in), sampleRate, clip)
 }
 
-func Compile(in io.Reader, sampleRate float64) (Machine, error) {
-
-    // Set iter nonzero to avoid zeros everywhere during dummy run
-    s := NewOpcodeMachine(sampleRate)
-
-    s.Init()
+func NewMachine(in io.Reader, sampleRate float64, clip float64) (Machine, error) {
+    s := NewOpcodeMachine(sampleRate, clip)
+    s.Init(nil)
     err := s.Program(in)
+    return s, err
+}
 
+func CloneMachine(in io.Reader, m Machine) (Machine, error) {
+    s := NewOpcodeMachine(0, 0)
+    s.Init(m)
+    err := s.Program(in)
     return s, err
 }

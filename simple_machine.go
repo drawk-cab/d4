@@ -16,10 +16,8 @@ const SM_COMMENT = 4
 const SM_IF_FALSE = 5
 
 type SimpleMachine struct {
-    iter int
-    sampleRate float64
+    MachineData
     step float64
-    clip float64
     code []string
     words map[string][]string
     variables map[string][]float64
@@ -28,10 +26,18 @@ type SimpleMachine struct {
 }
 
 func NewSimpleMachine( sampleRate float64 ) *SimpleMachine {
-    return &SimpleMachine{0, sampleRate, 1/(LOOP*sampleRate), 1.0, nil, nil, nil, nil, nil}
+    return &SimpleMachine{MachineData{0, sampleRate, 1.0}, 1/(LOOP*sampleRate), nil, nil, nil, nil, nil}
 }
 
-func (m *SimpleMachine) Init() error {
+func (m *SimpleMachine) GetData() MachineData {
+    return m.MachineData
+}
+
+func (m *SimpleMachine) Init(clone_from Machine) error {
+    if clone_from != nil {
+        m.MachineData = clone_from.GetData()
+        m.step = 1/(LOOP*m.sampleRate)
+    }
     return nil
 }
 

@@ -17,7 +17,7 @@ func chk(err error) {
 }
 
 func test(t *testing.T, code string, expect_error bool, expect []float64, iterations int) {
-    machine, err := CompileString(code, 22050)
+    machine, err := NewMachineString(code, 22050)
     if err == nil {
         test_machine(t, machine, expect_error, expect, iterations)
     } else {
@@ -33,7 +33,7 @@ func test_file(t *testing.T, filename string, expect_error bool, expect []float6
         panic(err)
     }
     in := bufio.NewReader( opened_file )
-    machine, err := Compile(in, 22050)
+    machine, err := NewMachine(in, 22050)
     if err == nil {
         test_machine(t, machine, expect_error, expect, iterations)
     } else {

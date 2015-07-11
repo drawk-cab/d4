@@ -1,12 +1,16 @@
 package d4
 
 type Word struct {
-    opcode float64 // so we can stick everything in a big array
+    name string
+    opcode float64    // so we can stick everything in a big array
     t_dependent bool
+    needs int         // how many values must be on the stack
 }
 
 const W_NOOP = 0xff
 const W_NUMBER = 0xfe // used to signal the next item is a number not an opcode
+const W_OUTPUT = 0xfd
+const W_CLIP = 0xfc
 const W_EOF = 0x00 // stop
 
 const W_BEGIN_COMMENT = 0xf0
@@ -67,69 +71,67 @@ const W_SQ = 0x85
 
 var WORDS = map[string]Word{
 
-    // . as noop is consistent with Forth because in d4,
-    // for a value to be output it merely needs to be on the stack.
+    "NOOP":     Word{ "NOOP", W_NOOP, false, 0 },
+    ".":        Word{ ".", W_OUTPUT, false, 1 },
+    "CLIP":     Word{ "CLIP", W_CLIP,   false, 1 },
 
-    ".":        Word{ W_NOOP, false },
-    "NOOP":     Word{ W_NOOP, false },
+    "(":        Word{ "(", W_BEGIN_COMMENT,  false, 0 },
+    ")":        Word{ ")", W_END_COMMENT,  false, 0 },
+    ":":        Word{ ":", W_BEGIN_DEF,  false, 0 },
+    ";":        Word{ ";", W_END_DEF,  false, 0 },
+    "IF":       Word{ "IF", W_IF,  false, 1 },
+    "THEN":     Word{ "THEN", W_THEN,  false, 0 },
+    "ELSE":     Word{ "ELSE", W_ELSE,  false, 0 },
+    "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 1 },
+    "VARIABLE": Word{ "VARIABLE", W_VARIABLE,  false, 1 },
+    "LOOP":     Word{ "LOOP", W_LOOP,  false, 0 },
 
-    "(":        Word{ W_BEGIN_COMMENT,  false },
-    ")":        Word{ W_END_COMMENT,  false },
-    ":":        Word{ W_BEGIN_DEF,  false },
-    ";":        Word{ W_END_DEF,  false },
-    "IF":       Word{ W_IF,  false },
-    "THEN":     Word{ W_THEN,  false },
-    "ELSE":     Word{ W_ELSE,  false },
-    "CONSTANT": Word{ W_CONSTANT,  false },
-    "VARIABLE": Word{ W_VARIABLE,  false },
-    "LOOP":     Word{ W_LOOP,  false },
+    "FALSE":    Word{ "FALSE", W_FALSE,    false, 0 },
+    "TRUE":     Word{ "TRUE", W_TRUE,    false, 0 },
+    "+":        Word{ "+", W_PLUS,    false, 2 },
+    "-":        Word{ "-", W_MINUS,    false, 2 },
+    "*":        Word{ "*", W_TIMES,    false, 2 },
+    "/":        Word{ "/", W_DIVIDE,    false, 2 },
+    "MOD":      Word{ "MOD", W_MOD,    false, 2 },
+    "DMOD":     Word{ "DMOD", W_DMOD,    false, 2 },
 
-    "FALSE":    Word{ W_FALSE,    false },
-    "TRUE":     Word{ W_TRUE,    false },
-    "+":        Word{ W_PLUS,    false },
-    "-":        Word{ W_MINUS,    false },
-    "*":        Word{ W_TIMES,    false },
-    "/":        Word{ W_DIVIDE,    false },
-    "MOD":      Word{ W_MOD,    false },
-    "DMOD":     Word{ W_DMOD,    false },
-
-    "=":        Word{ W_EQUALS,    false },
-    ">":        Word{ W_GREATER,    false },
-    "<":        Word{ W_LESS,    false },
-    "NOT":      Word{ W_NOT,    false },
-    "AND":      Word{ W_AND,    false },
-    "OR":       Word{ W_OR,    false },
-    "MAX":      Word{ W_MAX,    false },
-    "MIN":      Word{ W_MIN,    false },
+    "=":        Word{ "=", W_EQUALS,    false, 2 },
+    ">":        Word{ ">", W_GREATER,    false, 2 },
+    "<":        Word{ "<", W_LESS,    false, 2 },
+    "NOT":      Word{ "NOT", W_NOT,    false, 1 },
+    "AND":      Word{ "AND", W_AND,    false, 2 },
+    "OR":       Word{ "OR", W_OR,    false, 2 },
+    "MAX":      Word{ "MAX", W_MAX,    false, 2 },
+    "MIN":      Word{ "MIN", W_MIN,    false, 2 },
 
 
-    "DUP":      Word{ W_DUP,    false },
-    "DDUP":     Word{ W_DDUP,    false },
-    "OVER":     Word{ W_OVER,    false },
-    "DROP":     Word{ W_DROP,    false },
-    "NIP":      Word{ W_NIP,    false },
-    "TUCK":     Word{ W_TUCK,    false },
-    "SWAP":     Word{ W_SWAP,    false },
-    "ROT":      Word{ W_ROT,    false },
+    "DUP":      Word{ "DUP", W_DUP,    false, 1 },
+    "DDUP":     Word{ "DDUP", W_DDUP,    false, 2 },
+    "OVER":     Word{ "OVER", W_OVER,    false, 2 },
+    "DROP":     Word{ "DROP", W_DROP,    false, 1 },
+    "NIP":      Word{ "NIP", W_NIP,    false, 2 },
+    "TUCK":     Word{ "TUCK", W_TUCK,    false, 1 },
+    "SWAP":     Word{ "SWAP", W_SWAP,    false, 2 },
+    "ROT":      Word{ "ROT", W_ROT,    false, 3 },
 
-    "HZ":       Word{ W_HZ,    false },
-    "BPM":      Word{ W_BPM,    false },
-    "S":        Word{ W_S,    false },
+    "HZ":       Word{ "HZ", W_HZ,    false, 1 },
+    "BPM":      Word{ "BPM", W_BPM,    false, 1 },
+    "S":        Word{ "S", W_S,    false, 1 },
 
-    "FLAT":     Word{ W_FLAT,    false },
-    "SHARP":    Word{ W_SHARP,    false },
-    "#":        Word{ W_SHARP,    false },
-    "HIGH":     Word{ W_HIGH,    false },
-    "'":        Word{ W_HIGH,    false },
-    "LOW":      Word{ W_LOW,    false },
-    ",":        Word{ W_LOW,    false },
+    "FLAT":     Word{ "FLAT", W_FLAT,    false, 1 },
+    "SHARP":    Word{ "SHARP", W_SHARP,    false, 1 },
+    "#":        Word{ "#", W_SHARP,    false, 1 },
+    "HIGH":     Word{ "HIGH", W_HIGH,    false, 1 },
+    "'":        Word{ "'", W_HIGH,    false, 1 },
+    "LOW":      Word{ "LOW", W_LOW,    false, 1 },
+    ",":        Word{ ",", W_LOW,    false, 1 },
 
-    "ON":       Word{ W_ON,    false },
+    "ON":       Word{ "ON", W_ON,    false, 3 },
 
-    "T":        Word{ W_T,    true },
-    "SIN":      Word{ W_SIN,    true },
-    "SAW":      Word{ W_SAW,    true },
-    "TR":       Word{ W_TR,    true },
-    "PULSE":    Word{ W_PULSE,    true },
-    "SQ":       Word{ W_SQ,    true },
+    "T":        Word{ "T", W_T,    true, 0 },
+    "SIN":      Word{ "SIN", W_SIN,    true, 1 },
+    "SAW":      Word{ "SAW", W_SAW,    true, 1 },
+    "TR":       Word{ "TR", W_TR,    true, 1 },
+    "PULSE":    Word{ "PULSE", W_PULSE,    true, 2 },
+    "SQ":       Word{ "SQ", W_SQ,    true, 1 },
 }
