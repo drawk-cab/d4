@@ -57,7 +57,6 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 * `SWAP` ( x y -- y x )
 * `ROT` ( x y z -- y z x )
 * `DMOD` ( number, modulus -- remainder, floor ) : standard Forth `/MOD`
-* **TODO** `CONSTANT name` : Evaluated on first run only, must not depend on `T`
 * **TODO** `VARIABLE`
 * **TODO** `!` `@`
 
@@ -86,6 +85,10 @@ The word `.` pops the value off the top of the stack and adds it to an output st
     _example_ `T 1S 4 DMOD FROM play_c play_d play_e play_f CHOOSE` will execute `play_c` in the first second, `play_d` in the second, and so on. Because of the `DMOD`, the age of each note will be on TOS for the play routines.
 
 ## Musical words
+
+* `#`, `SHARP` ( freq -- freq ) : Sharpen a frequency by 1 semitone (equal tempered)
+
+* `FLAT` ( freq -- freq ) : Flatten a frequency by 1 semitone (equal tempered)
 
 * `SIN` ( freq -- pcm ) : Sine wave oscillator
 
