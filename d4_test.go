@@ -8,7 +8,7 @@ import (
     "bufio"
 )
 
-const ITERS = 1
+const ITERS = 10000
 
 func chk(err error) {
     if (err != nil) {
@@ -17,7 +17,7 @@ func chk(err error) {
 }
 
 func test(t *testing.T, code string, expect_error bool, expect []float64, iterations int) {
-    machine, err := NewMachineString(code, 22050)
+    machine, err := NewMachineString(code, 22050, 1)
     if err == nil {
         test_machine(t, machine, expect_error, expect, iterations)
     } else {
@@ -33,7 +33,7 @@ func test_file(t *testing.T, filename string, expect_error bool, expect []float6
         panic(err)
     }
     in := bufio.NewReader( opened_file )
-    machine, err := NewMachine(in, 22050)
+    machine, err := NewMachine(in, 22050, 1)
     if err == nil {
         test_machine(t, machine, expect_error, expect, iterations)
     } else {
@@ -90,7 +90,7 @@ func TestEmpty(t *testing.T) {
 
 func TestPush(t *testing.T) {
     test( t, 
-              "47.3",
+              "47.3 .",
               false, []float64{47.3},
               ITERS,
     )
@@ -98,7 +98,7 @@ func TestPush(t *testing.T) {
 
 func TestAdd(t *testing.T) {
     test( t, 
-              "47 21 +",
+              "47 21 + .",
               false, []float64{68},
               ITERS,
     )
@@ -106,31 +106,47 @@ func TestAdd(t *testing.T) {
 
 func TestSub(t *testing.T) {
     test( t, 
-              "47 21 -",
+              "47 21 - .",
               false, []float64{26},
+              ITERS,
+    )
+}
+
+func TestMul(t *testing.T) {
+    test( t, 
+              "47 2 * .",
+              false, []float64{94},
+              ITERS,
+    )
+}
+
+func TestDiv(t *testing.T) {
+    test( t, 
+              "94 2 / .",
+              false, []float64{47},
               ITERS,
     )
 }
 
 func TestSwap(t *testing.T) {
     test( t, 
-              "47 21 SWAP",
-              false, []float64{21, 47},
+              "47 21 SWAP . .",
+              false, []float64{47, 21},
               ITERS,
     )
 }
 
 func TestComment(t *testing.T) {
     test( t, 
-              "47 (Hi; I am: a comment (quite a hard one)) 21 SWAP",
-              false, []float64{21, 47},
+              "47 (Hi; I am: a comment (quite a hard one)) 21 SWAP . .",
+              false, []float64{47, 21},
               ITERS,
     )
 }
 
 func TestDefinition(t *testing.T) {
     test( t, 
-              "3 :five 5; :two five 3 -; five + two +",
+              "3 :five 5; :two five 3 -; five + two + .",
               false, []float64{10},
               ITERS,
     )
@@ -138,7 +154,7 @@ func TestDefinition(t *testing.T) {
 
 func TestRecursiveDefinition(t *testing.T) {
     test( t, 
-              ":here there; :there yonder; :yonder here; here",
+              ":here there; :there yonder; :yonder here; here .",
               true, nil,
               ITERS,
     )
@@ -146,32 +162,40 @@ func TestRecursiveDefinition(t *testing.T) {
 
 func TestIfElse(t *testing.T) {
     test( t, 
-              "11 10 > IF 1 ELSE 2 THEN 11 10 < IF 1 ELSE 2 THEN",
-              false, []float64{1, 2},
+              "4 11 10 > IF 1 . ELSE 2 . THEN 11 10 < IF 1 . ELSE 2 . THEN .",
+              false, []float64{1, 2, 4},
               ITERS,
     )
 }
 
 func TestNestedIfElse(t *testing.T) {
     test( t, 
-              "11 10 > IF 11 10 > IF 1 ELSE 2 THEN ELSE 3 THEN 11 10 < IF 1 ELSE 11 10 < IF 2 ELSE 3 THEN THEN",
-              false, []float64{1, 3},
+              "4 11 10 > IF 11 10 > IF 1 . ELSE 2 . THEN ELSE 3 . THEN 11 10 < IF 1 . ELSE 11 10 < IF 2 . ELSE 3 . THEN THEN .",
+              false, []float64{1, 3, 4},
+              ITERS,
+    )
+}
+
+func TestChoose(t *testing.T) {
+    test( t, 
+              "3 FROM 7, 8, 9, 10, 11, 12 CHOOSE .",
+              false, []float64{10},
               ITERS,
     )
 }
 
 func TestOscillators(t *testing.T) {
     test( t, 
-              "0.25 SIN 0.25 SAW 0.25 SQ 0.25 TR",
-              false, []float64{1, -0.5, 1, 1},
+              "0.25 SIN . 0.25 SAW . 0.25 SQ . 0.25 TR .",
+              false, []float64{1, -0.5, 1, 0},
               ITERS,
     )
 }
 
-func TestLoopTune(t *testing.T) {
+func TestTune(t *testing.T) {
     test_file( t, 
-              "tests/loop-tune.d4",
-              false, []float64{0},
+              "tests/gloucester.d4",
+              false, []float64{-1},
               ITERS,
     )
 }

@@ -14,6 +14,7 @@ const M_DEF = 2
 const M_CONSTANT = 3
 const M_COMMENT = 4
 const M_IF_FALSE = 5
+const M_CHOOSE_FALSE = 6
 
 type OpcodeMachine struct {
     MachineData
@@ -213,6 +214,7 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     var err error
     var pop float64
     var w_info Word
+    var choose_value int
 
     code_ptr := 0
     top := -1
@@ -238,6 +240,19 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         mode = M_NORMAL
                 }
 
+            case M_CHOOSE_FALSE:
+                switch w {
+                    case W_CHOOSE:
+                        var old_mode int
+                        old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
+                        mode = old_mode
+                    case W_CHOOSE_SEP:
+                        choose_value -= 1
+                        if choose_value == 0 {
+                            mode = M_NORMAL
+                        }
+                }
+
             case M_NORMAL:
                 switch w {
 
@@ -255,14 +270,7 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         pop, stack = stack[top], stack[:top]
                         m.clip = pop
 
-                    /* Forth words */
-
-                    case W_TRUE:
-                        stack = append(stack, 1)
-                        top += 1
-                    case W_FALSE:
-                        stack = append(stack, 0)
-                        top += 1
+                    /* Runtime control */
 
                     case W_IF:
                         pop, stack = stack[top], stack[:top]
@@ -271,7 +279,6 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         if pop == 0 {
                             mode = M_IF_FALSE
                         }
-                            
 
                     case W_THEN:
                         var old_mode int
@@ -281,6 +288,34 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                     case W_ELSE:
                         // Must have been executing an IF clause, skip to THEN
                         mode = M_IF_FALSE
+
+                    case W_FROM:
+                        choose_value, stack = int(stack[top]), stack[:top]
+                        top -= 1
+                        mode_breadcrumb = append(mode_breadcrumb, mode)
+                        if choose_value != 0 {
+                            mode = M_CHOOSE_FALSE
+                        }
+
+                    case W_CHOOSE_SEP:
+                        choose_value -= 1
+                        if choose_value != 0 {
+                            mode = M_CHOOSE_FALSE
+                        }
+
+                    case W_CHOOSE:
+                        var old_mode int
+                        old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
+                        mode = old_mode
+
+                    /* Forth words */
+
+                    case W_TRUE:
+                        stack = append(stack, 1)
+                        top += 1
+                    case W_FALSE:
+                        stack = append(stack, 0)
+                        top += 1
 
                     case W_PLUS:
                         pop, stack = stack[top], stack[:top]
@@ -496,13 +531,13 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                 }
         }
         if DEBUG == true {
-            fmt.Println(w,"--",stack,top,mode_breadcrumb,mode)
+            fmt.Println(w,"--",stack,top,"mode",mode_breadcrumb,mode,"choose",choose_value,"out",output)
         }
         code_ptr += 1
         w = m.code[code_ptr]
     }
     if DEBUG == true {
-        fmt.Println("<<",stack)
+        fmt.Println("<<",stack,"out",output)
     }
 
     return output, err

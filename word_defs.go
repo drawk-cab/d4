@@ -8,21 +8,25 @@ type Word struct {
 }
 
 const W_NOOP = 0xff
-const W_NUMBER = 0xfe // used to signal the next item is a number not an opcode
-const W_OUTPUT = 0xfd
-const W_CLIP = 0xfc
+const W_NUMBER = 0xf0 // used to signal the next item is a number not an opcode
+const W_OUTPUT = 0xf1
+const W_CLIP = 0xf2
+
 const W_EOF = 0x00 // stop
 
-const W_BEGIN_COMMENT = 0xf0
-const W_END_COMMENT = 0xf1
-const W_BEGIN_DEF = 0xf2
-const W_END_DEF = 0xf3
-const W_IF = 0xf4
-const W_THEN = 0xf5
-const W_ELSE = 0xf6
-const W_CONSTANT = 0xf7
-const W_VARIABLE = 0xf8
-const W_LOOP = 0xf9
+const W_BEGIN_COMMENT = 0xe0
+const W_END_COMMENT = 0xe1
+const W_BEGIN_DEF = 0xe2
+const W_END_DEF = 0xe3
+const W_IF = 0xe4
+const W_THEN = 0xe5
+const W_ELSE = 0xe6
+const W_CONSTANT = 0xe7
+const W_VARIABLE = 0xe8
+const W_LOOP = 0xe9
+const W_CHOOSE = 0xea
+const W_FROM = 0xeb
+const W_CHOOSE_SEP = 0xec
 
 const W_FALSE = 0x01
 const W_TRUE = 0x02
@@ -85,6 +89,9 @@ var WORDS = map[string]Word{
     "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 1 },
     "VARIABLE": Word{ "VARIABLE", W_VARIABLE,  false, 1 },
     "LOOP":     Word{ "LOOP", W_LOOP,  false, 0 },
+    "CHOOSE":   Word{ "CHOOSE", W_CHOOSE,  false, 0 },
+    "FROM":     Word{ "FROM", W_FROM,  false, 1 },
+    ",":        Word{ ",", W_CHOOSE_SEP, false, 0 },
 
     "FALSE":    Word{ "FALSE", W_FALSE,    false, 0 },
     "TRUE":     Word{ "TRUE", W_TRUE,    false, 0 },
@@ -124,7 +131,7 @@ var WORDS = map[string]Word{
     "HIGH":     Word{ "HIGH", W_HIGH,    false, 1 },
     "'":        Word{ "'", W_HIGH,    false, 1 },
     "LOW":      Word{ "LOW", W_LOW,    false, 1 },
-    ",":        Word{ ",", W_LOW,    false, 1 },
+    "_":        Word{ "_", W_LOW,    false, 1 },
 
     "ON":       Word{ "ON", W_ON,    false, 3 },
 
