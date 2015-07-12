@@ -27,6 +27,8 @@ const W_LOOP = 0xe9
 const W_CHOOSE = 0xea
 const W_FROM = 0xeb
 const W_CHOOSE_SEP = 0xec
+const W_BEGIN_LITERAL = 0xed
+const W_END_LITERAL = 0xee
 
 const W_FALSE = 0x01
 const W_TRUE = 0x02
@@ -76,6 +78,7 @@ const W_SQ = 0x85
 var WORDS = map[string]Word{
 
     "NOOP":     Word{ "NOOP", W_NOOP, false, 0 },
+    "LITERAL":  Word{ "NOOP", W_NOOP, false, 0 }, // merely to allow [ ] LITERAL to work like in forth
     ".":        Word{ ".", W_OUTPUT, false, 1 },
     "CLIP":     Word{ "CLIP", W_CLIP,   false, 1 },
 
@@ -92,6 +95,8 @@ var WORDS = map[string]Word{
     "CHOOSE":   Word{ "CHOOSE", W_CHOOSE,  false, 0 },
     "FROM":     Word{ "FROM", W_FROM,  false, 1 },
     ",":        Word{ ",", W_CHOOSE_SEP, false, 0 },
+    "[":        Word{ "[", W_BEGIN_LITERAL,  false, 0 },
+    "]":        Word{ "]", W_END_LITERAL,  false, 0 },
 
     "FALSE":    Word{ "FALSE", W_FALSE,    false, 0 },
     "TRUE":     Word{ "TRUE", W_TRUE,    false, 0 },
@@ -121,9 +126,9 @@ var WORDS = map[string]Word{
     "SWAP":     Word{ "SWAP", W_SWAP,    false, 2 },
     "ROT":      Word{ "ROT", W_ROT,    false, 3 },
 
-    "HZ":       Word{ "HZ", W_HZ,    false, 1 },
-    "BPM":      Word{ "BPM", W_BPM,    false, 1 },
-    "S":        Word{ "S", W_S,    false, 1 },
+    "HZ":       Word{ "HZ", W_HZ,    true, 1 },
+    "BPM":      Word{ "BPM", W_BPM,    true, 1 },
+    "S":        Word{ "S", W_S,    true, 1 },
 
     "FLAT":     Word{ "FLAT", W_FLAT,    false, 1 },
     "SHARP":    Word{ "SHARP", W_SHARP,    false, 1 },

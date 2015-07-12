@@ -1,18 +1,27 @@
-:A 440 HZ;
+( Gloucester Hornpipe )
 
-:G A FLAT FLAT;
-:B A##;
-:C B#;
-:D C##;
-:E D##;
-:F E#;
+:: scale timing ;
 
-8 HZ 1 DMOD 64 MOD
 
-FROM
+:A_tune
+    64 10Hz beats
+    from
+        G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,D,C,B,A,B,C,A,G LOW,F# LOW,E LOW,D LOW,
+        G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,C,A,F# LOW,G LOW,,B,,G LOW,,D LOW,,
+    choose
+;
 
-G,,G',,G',,D,B,C,B,C,D,E,G',F#,E,D,B,G,B,E,D,C,B,A,B,C,A,G,F# LOW,E LOW,D LOW
-G,,G',,G',,D,B,C,B,C,D,E,G',F#,E,D,B,G,E,C,A,F# LOW,G,,B,,G,,D LOW,,
+:B_tune noop;
 
-CHOOSE TR .
+4 10Hz 64/ beats
+from
+    A_tune, A_tune, B_tune, B_tune
+choose
+Lead
+
+(instruments)
+
+    :Lead (freq -- SOUND)
+        dup 2/ tr. 4* tr 0.1*. 
+    ;
 

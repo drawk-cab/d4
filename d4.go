@@ -13,7 +13,7 @@ var SEMITONE = math.Pow(2, 1.0/12)
 var SEC = float64(LOOP)
 var BPM = float64(LOOP / 60)
 
-const DEBUG = false
+var DEBUG = false
 
 func NewMachineString(in string, sampleRate float64, clip float64) (Machine, error) {
     return NewMachine(strings.NewReader(in), sampleRate, clip)

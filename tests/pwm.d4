@@ -1,0 +1,37 @@
+( Lead synth with pulse width modulation )
+
+8 5Hz beats
+
+from
+    (1) A Lead,
+    (2) A' Lead,
+    (3) E Lead,
+    (4) D' Lead,
+    (5) B Lead,
+    (6) E low Lead,
+    (7) G' Lead,
+    (8) D Lead
+choose
+
+( -- definitions -- )
+
+(notes) :A 220Hz;    :D A3/4*;    :E A3*2/;    :G D3/2*;    :B E3*4/;
+
+(instruments)
+
+    :Lead (freq -- SOUND)
+        dup low tr 2*. pwm pulse.
+    ;
+
+(oscillators)
+
+    :pwm  (freq -- pcm)
+        2Hz sin 0.2* 0.3+
+    ;
+
+(helper functions)
+
+    :beats (loop-count freq -- beat-age beat-num) 
+        1 dmod rot mod
+    ;
+

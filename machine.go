@@ -10,8 +10,9 @@ type MachineData struct {
 
 type Machine interface {
     Init(Machine) error
-    Program(io.Reader) error
+    Program(io.Reader) (error)
     Run() ([]float64, error)
+    RunCode([]float64) ([]float64, []float64, error)
     Fill32([]float32) error
     GetData() MachineData
 }

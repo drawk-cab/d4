@@ -1,0 +1,24 @@
+8 6Hz beats
+
+from
+(1) A lead. E low lead. A bass.,
+(2) ,
+(3) A' lead. E lead.,
+(4) ,
+(5) B lead.,
+(6) G lead. E bass.,
+(7) ,
+(8) D lead.
+choose
+
+(definitions)
+
+:A 220Hz;
+:G A flat flat;
+:B A##;
+:D B###;
+:E D##;
+
+:beats 1 dmod rot mod;
+:bass low low sin;
+:lead 0.1 pulse;

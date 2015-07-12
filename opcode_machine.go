@@ -1,6 +1,7 @@
 package d4
 
 import (
+    "strings"
     "math"
     "fmt"
     "strconv"
@@ -15,6 +16,8 @@ const M_CONSTANT = 3
 const M_COMMENT = 4
 const M_IF_FALSE = 5
 const M_CHOOSE_FALSE = 6
+const M_LITERAL = 7
+const M_IMPORT = 8
 
 type OpcodeMachine struct {
     MachineData
@@ -36,7 +39,9 @@ func (m *OpcodeMachine) GetData() MachineData {
 }
 
 func (m *OpcodeMachine) Init(clone_from Machine) error {
-    m.opcode_info = map[float64]Word{}
+    m.opcode_info = map[float64]Word{
+        W_NUMBER: Word{ "n", W_NUMBER, false, 0 }, // this opcode is created, not supplied
+    }
     if clone_from != nil {
         m.MachineData = clone_from.GetData()
         m.step = 1/(LOOP*m.sampleRate)
@@ -45,46 +50,122 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
 }
 
 func (m *OpcodeMachine) Program( in io.Reader ) error {
+
+    words, imports, err := m.read(in)
+    m.words = words
+
+    if err != nil {
+        return err
+    }
+
+    for _, name := range imports {
+
+        in = strings.NewReader( IMPORTS[name] )
+        new_words, new_imports, err := m.read( in )
+
+        if err != nil {
+            return err
+        }
+
+        if len(new_imports)>0 {
+            return fmt.Errorf("Program error: import %s tried to import %s", name, new_imports)
+            // TODO: allow imports to import
+        }
+
+        for w, defn := range new_words {
+            _, ok := m.words[w]
+            if !ok {
+                m.words[w] = defn
+            } else {
+                // don't overwrite existing word
+            }
+        }
+    }
+
+    // We now have a set of word definitions (counting '' for everything outside a word definition)
+    // which we can translate into opcodes
+
+    var breadcrumb []string = []string{}
+    var code = []float64{}
+
+    code, err = m.compile(code, "", breadcrumb)
+
+    if err != nil {
+        return err
+    }
+    
+    code = append(code, W_EOF)
+
+    m.code, err = m.optimize(code)
+
+    return err
+}
+
+func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, error) {
+
+    imports := []string{}
+
+    words := map[string][]string{ "": []string{} }
+
     scanner := bufio.NewScanner(in)
 
     scanner.Split(ScanForthWords)
 
-    var new_word string
-
-    words := map[string][]string{ "": []string{} }
+    cur_word := ""
     mode := []int{M_NORMAL}
 
     for scanner.Scan() {
         w := scanner.Text()
         switch mode[len(mode)-1] {
-            case M_COLON:
-                new_word = w
 
-                _, exists := words[new_word]
-                if exists {
-                    return fmt.Errorf("Scan error: %s has already been defined", new_word)
-                } else {                
-                    _, exists := WORDS[new_word]
+            case M_COLON:
+
+                if w == ":" {
+                    mode[len(mode)-1] = M_IMPORT
+                } else {
+                    cur_word = strings.ToUpper(w)
+
+                    _, exists := words[cur_word]
                     if exists {
-                        return fmt.Errorf("Scan error: %s is a built-in word and cannot be redefined", new_word)
-                    } else {
-                        words[new_word] = nil
-                        mode[len(mode)-1] = M_DEF
+                        return words, imports, fmt.Errorf("Scan error: %s has already been defined", cur_word)
+                    } else {                
+                        _, exists := WORDS[cur_word]
+                        if exists {
+                            return words, imports, fmt.Errorf("Scan error: %s is a built-in word and cannot be redefined", cur_word)
+                        } else {
+                            words[cur_word] = nil
+                            mode[len(mode)-1] = M_DEF
+                        }
                     }
                 }
 
             case M_DEF:
                 switch w {
                     case ":":
-                        return fmt.Errorf("Scan error: : found inside definition")
+                        return words, imports, fmt.Errorf("Scan error: : found inside definition")
                     case ")":
-                        return fmt.Errorf("Scan error: ) found outside comment")
+                        return words, imports, fmt.Errorf("Scan error: ) found outside comment")
                     case ";":
+                        cur_word = ""
                         mode = mode[:len(mode)-1]
                     case "(":
                         mode = append(mode, M_COMMENT)
                     default:
-                        words[new_word] = append(words[new_word], w)
+                        words[cur_word] = append(words[cur_word], w)
+                }
+
+            case M_IMPORT:
+                switch w {
+                    case ":":
+                        return words, imports, fmt.Errorf("Scan error: : found inside import statement")
+                    case "(":
+                        mode = append(mode, M_COMMENT)
+                    case ")":
+                        return words, imports, fmt.Errorf("Scan error: ) found outside comment")
+                    case ";":
+                        mode = mode[:len(mode)-1]
+                    default:
+                        imports = append(imports, w)
                 }
 
             case M_COMMENT:
@@ -102,11 +183,11 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
                     case "(":
                         mode = append(mode, M_COMMENT)
                     case ";":
-                        return fmt.Errorf("Scan error: ; found outside definition")
+                        return words, imports, fmt.Errorf("Scan error: ; found outside definition")
                     case ")":
-                        return fmt.Errorf("Scan error: ) found outside comment")
+                        return words, imports, fmt.Errorf("Scan error: ) found outside comment")
                     default:
-                        words[""] = append(words[""], w)
+                        words[cur_word] = append(words[cur_word], w)
                 }
         }
         if DEBUG {
@@ -116,27 +197,13 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
 
     err := scanner.Err()
 
-    if err != nil {
-        return err
-    }
-
-    m.words = words
-
-    // We now have a set of word definitions (counting '' for everything outside a word definition)
-    // which we can translate into opcodes
-
-    var breadcrumb []string = []string{}
-    var code = []float64{}
-
-    code, err = m.compile(code, "", breadcrumb)
-    
-    m.code = append(code, W_EOF)
-
-    return err
+    return words, imports, err
 }
 
 func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []string ) ([]float64, error) {
     var err error
+
+    word = strings.ToUpper(word)
 
     defn, ok := m.words[word]
     if ok {
@@ -153,6 +220,8 @@ func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []strin
         }
 
         for _, w := range defn {
+            w = strings.ToUpper(w)
+
             word_info, ok := WORDS[w]
             if ok {
                 code = append(code, word_info.opcode)
@@ -171,11 +240,68 @@ func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []strin
         if err != nil {
             return code, fmt.Errorf("Compile error: unknown word %s", word)
         }
-        code = append(code, W_NUMBER)
-        code = append(code, num)
-
+        code = append(code, W_NUMBER, num)
     }
     return code, err
+}
+
+func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
+    var output []float64
+
+    literal := []float64{}
+
+    mode := []int{M_NORMAL}
+
+    for _, w := range code {
+        switch mode[len(mode)-1] {
+            case M_LITERAL:
+                switch w {
+                    case W_BEGIN_LITERAL:
+                        mode = append(mode, M_LITERAL)
+                    case W_END_LITERAL:
+                        mode = mode[:len(mode)-1]
+                        if mode[len(mode)-1] == M_NORMAL {
+                            // outside [], time to evaluate
+                            literal = append(literal, W_EOF)
+                            if DEBUG == true {
+                                fmt.Println("Evaluating",literal)
+                            }
+                            literal_output, literal_stack, err := m.RunCode(literal)
+                            if DEBUG == true {
+                                fmt.Println("Replacing with",literal_stack)
+                            }
+                            if err != nil {
+                                return output, err
+                            }
+                            if len(literal_output) > 0 {
+                                return output, fmt.Errorf("Optimize error: attempted output from within [ ]")
+                            }
+                            for _, value := range literal_stack {
+                                output = append(output, W_NUMBER, value)
+                            }
+                            literal = []float64{}
+                        }
+                    default:
+                        literal = append(literal, w)
+                }
+            case M_NORMAL:
+                switch w {
+                    case W_BEGIN_LITERAL:
+                        mode = append(mode, M_LITERAL)
+                    case W_END_LITERAL:
+                        return output, fmt.Errorf("Optimize error: ] found outside literal")
+                    default:
+                        output = append(output, w)                
+                }
+        }
+    }
+
+    // if EOF during a literal, tack it on the end
+    for _, w := range literal {
+        output = append(output, w)
+    }
+
+    return output, nil //TODO
 }
 
 func (m *OpcodeMachine) Fill32( buf []float32 ) error {
@@ -204,12 +330,17 @@ func (m *OpcodeMachine) Fill32( buf []float32 ) error {
 }
 
 func (m *OpcodeMachine) Run() ([]float64, error) {
+    m.iter += 1
+    output, _, err := m.RunCode(m.code)
+    return output, err
+}
+
+func (m *OpcodeMachine) RunCode(code []float64) ([]float64, []float64, error) {
 
     output := []float64{}
     stack := []float64{}
 
     _, phase := math.Modf( float64(m.iter) * m.step )
-    m.iter += 1
 
     var err error
     var pop float64
@@ -222,13 +353,10 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     mode_breadcrumb := []int{}
     mode := M_NORMAL
 
-    w := m.code[code_ptr]
+    w := code[code_ptr]
 
     for w != W_EOF {
         w_info = m.opcode_info[w]
-        if w_info.needs > top+1 {
-            return output, fmt.Errorf("Runtime error: %s needs %d items on stack, got %s", w_info.name, w_info.needs, stack)
-        }
         switch mode {
             case M_IF_FALSE:
                 switch w {
@@ -254,13 +382,16 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                 }
 
             case M_NORMAL:
+                if w_info.needs > top+1 {
+                    return output, stack, fmt.Errorf("Runtime error: %s needs %d items on stack, got %s", w_info.name, w_info.needs, stack)
+                }
                 switch w {
 
-                    case W_NOOP:
+                    case W_NOOP, W_BEGIN_LITERAL, W_END_LITERAL:
                         // noop
                     case W_NUMBER:
                         code_ptr += 1
-                        stack = append(stack, m.code[code_ptr])
+                        stack = append(stack, code[code_ptr])
                         top += 1
                     case W_OUTPUT:
                         pop, stack = stack[top], stack[:top]
@@ -332,7 +463,7 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                     case W_DIVIDE:
                         pop, stack = stack[top], stack[:top]
                         if pop == 0 {
-                            return output, fmt.Errorf("Runtime error: divide by zero")
+                            return output, stack, fmt.Errorf("Runtime error: divide by zero")
                         }
                         top -= 1
                         stack[top] /= pop
@@ -343,7 +474,7 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
 
                     case W_DMOD:
                         if stack[top] == 0 {
-                            return output, fmt.Errorf("Runtime error: divide by zero")
+                            return output, stack, fmt.Errorf("Runtime error: divide by zero")
                         }
                         result, remainder := math.Modf( stack[top-1] / stack[top] )
                         stack[top] = result
@@ -527,18 +658,20 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
                         }
 
                     default:
-                        return output, fmt.Errorf("Runtime error: unknown opcode %d", w)
+                        return output, stack, fmt.Errorf("Runtime error: unknown opcode %d", w)
                 }
         }
+
         if DEBUG == true {
-            fmt.Println(w,"--",stack,top,"mode",mode_breadcrumb,mode,"choose",choose_value,"out",output)
+            fmt.Println(w_info.name,": stack=",stack,top,"mode=",mode_breadcrumb,mode,"choose=",choose_value,"out=",output)
         }
+
         code_ptr += 1
-        w = m.code[code_ptr]
+        w = code[code_ptr]
     }
     if DEBUG == true {
         fmt.Println("<<",stack,"out",output)
     }
 
-    return output, err
+    return output, stack, err
 }

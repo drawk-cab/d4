@@ -2,7 +2,7 @@
 Diminished Forth definition and interpreter
 
 This is the tiny language floatbeat uses to define sounds, designed for 
-fun and live coding of music. It's like Forth but simpler.
+fun and fast live coding of music, inspired by Forth.
 
 ## Principles
 
@@ -16,9 +16,7 @@ Whitespace is only needed in order to separate adjacent sequences of digits or l
     2.4* --> [2.4] [*]
     a__b!=5 --> [a__b] [!] [=] [5]
 
-Words are case sensitive.
-
-There are no built-in words beginning with a lowercase letter.
+Words are case insensitive.
 
 ### There is only one data type, number (float64)
 
