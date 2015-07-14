@@ -9,6 +9,17 @@ import (
     "io"
 )
 
+type Job struct {
+    id int
+    iter int64
+}
+
+type JobResult struct {
+    id int
+    value []float64
+    err error
+}
+
 const M_NORMAL = 0
 const M_COLON = 1
 const M_DEF = 2
@@ -24,14 +35,14 @@ type OpcodeMachine struct {
     step float64
     code []float64
     words map[string][]string
-    variables map[string][]float64
-    constants map[string][]float64
-    old_variables []map[string][]float64
+    save_addr int
+    save_names map[string]float64
+    saves map[int64]map[float64]float64
     opcode_info map[float64]Word
 }
 
-func NewOpcodeMachine( sampleRate float64, clip float64 ) *OpcodeMachine {
-    return &OpcodeMachine{MachineData{0, sampleRate, clip}, 1/(LOOP*sampleRate), nil, nil, nil, nil, nil, nil}
+func NewOpcodeMachine( sampleRate float64, clip float64, imports map[string]string ) *OpcodeMachine {
+    return &OpcodeMachine{MachineData{0, sampleRate, clip, imports}, 1/(LOOP*sampleRate), nil, nil, 1000, nil, nil, nil}
 }
 
 func (m *OpcodeMachine) GetData() MachineData {
@@ -42,6 +53,7 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
     m.opcode_info = map[float64]Word{
         W_NUMBER: Word{ "n", W_NUMBER, false, 0 }, // this opcode is created, not supplied
     }
+    m.saves = map[int64]map[float64]float64{}
     if clone_from != nil {
         m.MachineData = clone_from.GetData()
         m.step = 1/(LOOP*m.sampleRate)
@@ -51,25 +63,26 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
 
 func (m *OpcodeMachine) Program( in io.Reader ) error {
 
-    words, imports, err := m.read(in)
+    words, need_imports, err := m.read(in)
     m.words = words
 
     if err != nil {
         return err
     }
 
-    for _, name := range imports {
+    for _, name := range need_imports {
 
-        in = strings.NewReader( IMPORTS[name] )
+        in = strings.NewReader( m.imports[name] )
         new_words, new_imports, err := m.read( in )
 
+        fmt.Println(name, new_words)
         if err != nil {
             return err
         }
 
         if len(new_imports)>0 {
             return fmt.Errorf("Program error: import %s tried to import %s", name, new_imports)
-            // TODO: allow imports to import
+            // TODO: allow nested imports
         }
 
         for w, defn := range new_words {
@@ -115,15 +128,14 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
     mode := []int{M_NORMAL}
 
     for scanner.Scan() {
-        w := scanner.Text()
+        w := strings.ToUpper(scanner.Text())
         switch mode[len(mode)-1] {
 
             case M_COLON:
-
                 if w == ":" {
                     mode[len(mode)-1] = M_IMPORT
                 } else {
-                    cur_word = strings.ToUpper(w)
+                    cur_word = w
 
                     _, exists := words[cur_word]
                     if exists {
@@ -139,6 +151,15 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
                     }
                 }
 
+            case M_CONSTANT:
+
+                words[w] = []string{strconv.Itoa(m.save_addr)} // everything is a string at this point
+                m.save_addr += 1
+
+                words[cur_word] = append(words[cur_word], w)
+
+                mode = mode[:len(mode)-1]
+
             case M_DEF:
                 switch w {
                     case ":":
@@ -150,6 +171,8 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
                         mode = mode[:len(mode)-1]
                     case "(":
                         mode = append(mode, M_COMMENT)
+                    case "SAVE", "CONSTANT":
+                        mode = append(mode, M_CONSTANT)
                     default:
                         words[cur_word] = append(words[cur_word], w)
                 }
@@ -186,6 +209,8 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
                         return words, imports, fmt.Errorf("Scan error: ; found outside definition")
                     case ")":
                         return words, imports, fmt.Errorf("Scan error: ) found outside comment")
+                    case "SAVE", "CONSTANT":
+                        mode = append(mode, M_CONSTANT)
                     default:
                         words[cur_word] = append(words[cur_word], w)
                 }
@@ -203,7 +228,7 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
 func (m *OpcodeMachine) compile( code []float64, word string, breadcrumb []string ) ([]float64, error) {
     var err error
 
-    word = strings.ToUpper(word)
+    //word = strings.ToUpper(word)
 
     defn, ok := m.words[word]
     if ok {
@@ -266,7 +291,7 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
                             if DEBUG == true {
                                 fmt.Println("Evaluating",literal)
                             }
-                            literal_output, literal_stack, err := m.RunCode(literal)
+                            literal_output, literal_stack, err := m.RunCode(literal,0)
                             if DEBUG == true {
                                 fmt.Println("Replacing with",literal_stack)
                             }
@@ -304,12 +329,50 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
     return output, nil //TODO
 }
 
-func (m *OpcodeMachine) Fill32( buf []float32 ) error {
+func (m *OpcodeMachine) Fill32( buf []float32, workers int ) error {
+    if workers == 1 {
+        return m.fill32_single(buf)
+    } else {
+        return m.fill32_parallel(buf, workers)
+    }
+}
+
+func (m *OpcodeMachine) fill32_parallel( buf []float32, workers int ) error {
+
+    jobs := make(chan *Job, len(buf))
+    results := make(chan *JobResult, len(buf))
+
+    for w := 0; w <= workers; w++ {
+        go m.work()
+    }
+
+    for i := range buf {
+        jobs <- &Job{i, m.iter}
+        m.iter++
+    }
+    close(jobs)
+
+    for result := range results {
+        if result.err != nil {
+            return result.err
+        }
+
+        r := float64(0)
+        for _, s := range result.value {
+            r += s
+        }
+        buf[result.id] = float32( r / m.clip )
+    }
+    //fmt.Println(output, i)
+
+    return nil
+}
+
+func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
     var output []float64
     var err error
-    var i int
 
-    for i = range buf {
+    for i := range buf {
 
         output, err = m.Run()
 
@@ -324,22 +387,33 @@ func (m *OpcodeMachine) Fill32( buf []float32 ) error {
 
         buf[i] = float32(r / m.clip)
     }
+
     //fmt.Println(output, i)
 
     return err
 }
 
 func (m *OpcodeMachine) Run() ([]float64, error) {
+    output, _, err := m.RunCode(m.code, m.iter)
     m.iter += 1
-    output, _, err := m.RunCode(m.code)
     return output, err
 }
 
-func (m *OpcodeMachine) RunCode(code []float64) ([]float64, []float64, error) {
+func (m *OpcodeMachine) work() (jobs chan *Job) {
+    for j := range jobs {
+        fmt.Println("doing job",j)
+        output, _, err := m.RunCode(m.code, j.iter)
+        fmt.Println("output",output,err)
+        //results <- JobResult{j.id, output, err}
+    }
+    return nil
+}
+
+func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float64, error) {
 
     output := []float64{}
     stack := []float64{}
-
+    
     _, phase := math.Modf( float64(m.iter) * m.step )
 
     var err error
@@ -438,6 +512,36 @@ func (m *OpcodeMachine) RunCode(code []float64) ([]float64, []float64, error) {
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
+
+                    /* Memory */
+
+                    case W_PEEK:
+                        _, ok := m.saves[m.iter]
+                        if ok {
+                            val, okk := m.saves[m.iter][stack[top]]
+                            if okk {
+                                stack[top] = val
+                            } else {
+                                return output, stack, fmt.Errorf("Runtime error: nothing at address %d", stack[top])                            
+                            }
+                        } else {
+                            return output, stack, fmt.Errorf("Runtime error: nothing saved for iteration %d", m.iter)                            
+                        }
+
+                    case W_POKE:
+                        _, ok := m.saves[m.iter]
+                        if !ok {
+                            m.saves[m.iter] = map[float64]float64{}
+                        }
+
+                        _, okk := m.saves[m.iter][stack[top]]
+                        if okk {
+                            return output, stack, fmt.Errorf("Runtime error: address %d already in use", stack[top])                            
+                        } else {
+                            pop, stack = stack[top], stack[:top]
+                            top -= 1
+                            m.saves[m.iter][pop] = stack[top]
+                        }
 
                     /* Forth words */
 

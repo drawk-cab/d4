@@ -1,27 +1,36 @@
-( Gloucester Hornpipe )
+( Gloucester Hornpipe, imports inlined, no output )
 
-:: scale timing ;
-
-
-:A_tune
-    64 10Hz beats
-    from
-        G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,D,C,B,A,B,C,A,G LOW,F# LOW,E LOW,D LOW,
-        G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,C,A,F# LOW,G LOW,,B,,G LOW,,D LOW,,
-    choose
-;
-
-:B_tune noop;
-
-4 10Hz 64/ beats
+64 10Hz beats
 from
-    A_tune, A_tune, B_tune, B_tune
+    G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,D,C,B,A,B,C,A,G LOW,F# LOW,E LOW,D LOW,
+    G LOW,,G,,G,,D,B,C,B,C,D,E,G,F#,E,D,B,G LOW,B,E,C,A,F# LOW,G LOW,,B,,G LOW,,D LOW,,
 choose
+
 Lead
 
 (instruments)
 
     :Lead (freq -- SOUND)
-        dup 2/ tr. 4* tr 0.1*. 
+        dup 2/ tr drop 4* tr 0.1* drop
     ;
+
+(defs)
+
+        :ut 220;
+        :A  [ut]Hz;
+        :Bb [ut#]Hz;
+        :B  [ut##]Hz;
+        :C  [ut###]Hz;
+        :Db [ut####]Hz;
+        :D  [ut#####]Hz;
+        :Eb [ut######]Hz; 
+        :E  [ut#######]Hz;
+        :F  [ut########]Hz;
+        :Gb [ut#########]Hz;
+        :G  [ut##########]Hz;
+        :Ab [ut###########]Hz;
+
+        :beats (loop-count freq -- beat-age beat-num)
+            1 dmod rot mod
+        ;
 

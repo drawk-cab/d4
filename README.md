@@ -29,12 +29,12 @@ The iteration number is available in the built-in word `T`.
 Built-in words `S`, `BPM`, `HZ` convert `T` to time units based
 on a supplied sample rate (default 22050)
 
-**TODO** All defined `CONSTANT`s are saved at the end of the first iteration (`T` = 0).
-They are not evaluated again.
+Use `SAVE`...`!` to define a value to be used later: `75 SAVE my_var!` Retrieve with `my_var?`
 
-**TODO** All defined `VARIABLE`s are saved at the end of each iteration.
+`SAVE`d values are evaluated at runtime but are fixed once set.
+(This is a synonym for `CONSTANT` but `SAVE` is less confusing, as values may vary from one iteration to the next)
 
-**TODO** These values can be accessed in later iterations using `AGO`.
+**TODO** `SAVE`d values can be accessed in later iterations using `LATEST` or `OLD`.
 
 The word `.` pops the value off the top of the stack and adds it to an output stack ready to be returned.
 
@@ -55,32 +55,48 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 * `SWAP` ( x y -- y x )
 * `ROT` ( x y z -- y z x )
 * `DMOD` ( number, modulus -- remainder, floor ) : standard Forth `/MOD`
-* **TODO** `VARIABLE`
-* **TODO** `!` `@`
+* `CONSTANT`
+* `!` `?`
 
 ## Built-in units
 
-* `HZ`
-* `S`
-* `BPM`
+* `HZ` (freq -- counter) : Create a counter which increases by `freq` every second
+
+* `S` (time -- counter) : Create a counter which increases by 1 every `time` seconds
+
+* `BPM` (freq -- counter) : Create a counter which increases by `freq` every minute
 
 ## Extra words
 
-* **TODO** `.`, `NOOP` : noop
+* `.` : remove the item on top of stack (TOS) and add it to the output stack
 
-* **TODO** `AGO` ( variable_name time -- value ) : return the value the named `VARIABLE` ended up with after the iteration the specified time ago.
+* `NOOP` : noop
 
-* **TODO** `LAST` ( variable_name -- value ) : return the value the named `VARIABLE` ended up with in the previous iteration.
-
-* **TODO** `T` : iteration number (use `S`, `BPM`, `HZ` to convert to seconds)
+* **TODO** `T` : iteration number
 
 * `ON` ( schedule_t, duration, base_t -- 0 or age, 1 ) : Is the note of length `duration` scheduled for `schedule_t` currently in progress at time `base_t`, and if so, how old is it?
 
     _example_ `1S 0.5S T ON IF 440HZ SIN THEN` plays an A for 0.5 sec, 1 sec after the start.
 
-* **TODO** `FROM`...`CHOOSE` : treat TOS as a pointer and execute the word with that index between `FROM` and `CHOOSE` . So `2 FROM a b c d CHOOSE` would execute only `c` because `c` has index 2 in the set.
+* `FROM`...`CHOOSE` : treat TOS as a pointer and execute the word with that index between `FROM` and `CHOOSE` . So `2 FROM a b c d CHOOSE` would execute only `c` because `c` has index 2 in the set.
 
     _example_ `T 1S 4 DMOD FROM play_c play_d play_e play_f CHOOSE` will execute `play_c` in the first second, `play_d` in the second, and so on. Because of the `DMOD`, the age of each note will be on TOS for the play routines.
+
+    **TODO** currently nested `FROM`...`CHOOSE` are not working
+
+* `SAVE` === `CONSTANT`
+
+* **TODO** `OLD` ( definition_name time -- value ) : get the value saved under `definition_name` in the iteration the specified time ago
+
+* **TODO** `LATEST` ( definition_name -- value ) : get the value saved under `definition_name` in the previous iteration.
+
+* **TODO** `DELTA` (value -- d(value) ) : get the difference between the current value and the value supplied to `DELTA` in the previous iteration (via an anonymous variable)
+
+
+* `::`...`;` : import pre-set definition packages
+
+    _example_ `:: scale timing ;` will import the `scale` package (defines the equal tempered scale)
+    and the `timing` package (provides some helpful words for working with time intervals)
 
 ## Musical words
 
@@ -88,7 +104,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 * `FLAT` ( freq -- freq ) : Flatten a frequency by 1 semitone (equal tempered)
 
-* `SIN` ( freq -- pcm ) : Sine wave oscillator
+* `SIN` ( counter -- pcm ) : Sine wave oscillator
 
     _example_ `440 HZ SIN`
 

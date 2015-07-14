@@ -15,19 +15,19 @@ var BPM = float64(LOOP / 60)
 
 var DEBUG = false
 
-func NewMachineString(in string, sampleRate float64, clip float64) (Machine, error) {
-    return NewMachine(strings.NewReader(in), sampleRate, clip)
+func NewMachineString(in string, sampleRate float64, clip float64, imports map[string]string) (Machine, error) {
+    return NewMachine(strings.NewReader(in), sampleRate, clip, imports)
 }
 
-func NewMachine(in io.Reader, sampleRate float64, clip float64) (Machine, error) {
-    s := NewOpcodeMachine(sampleRate, clip)
+func NewMachine(in io.Reader, sampleRate float64, clip float64, imports map[string]string) (Machine, error) {
+    s := NewOpcodeMachine(sampleRate, clip, imports)
     s.Init(nil)
     err := s.Program(in)
     return s, err
 }
 
 func CloneMachine(in io.Reader, m Machine) (Machine, error) {
-    s := NewOpcodeMachine(0, 0)
+    s := NewOpcodeMachine(0, 0, nil)
     s.Init(m)
     err := s.Program(in)
     return s, err
