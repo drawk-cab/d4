@@ -36,13 +36,23 @@ type OpcodeMachine struct {
     code []float64
     words map[string][]string
     save_addr int
-    save_names map[string]float64
-    saves map[int64]map[float64]float64
+    saves []map[float64]float64
+    save_ptr int
     opcode_info map[float64]Word
 }
 
-func NewOpcodeMachine( sampleRate float64, clip float64, imports map[string]string ) *OpcodeMachine {
-    return &OpcodeMachine{MachineData{0, sampleRate, clip, imports}, 1/(LOOP*sampleRate), nil, nil, 1000, nil, nil, nil}
+func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, imports map[string]string ) *OpcodeMachine {
+
+    // import names are case insensitive and stored as capitals
+    upper_imports := map[string]string{}
+    for name, code := range imports {
+        upper_imports[strings.ToUpper(name)] = code
+    }
+
+    save_len := int(save_s * sample_rate)
+
+    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, upper_imports},
+                          1/(LOOP*sample_rate), nil, nil, 1000, nil, save_len-1, nil}
 }
 
 func (m *OpcodeMachine) GetData() MachineData {
@@ -50,14 +60,18 @@ func (m *OpcodeMachine) GetData() MachineData {
 }
 
 func (m *OpcodeMachine) Init(clone_from Machine) error {
+
     m.opcode_info = map[float64]Word{
         W_NUMBER: Word{ "n", W_NUMBER, false, 0 }, // this opcode is created, not supplied
     }
-    m.saves = map[int64]map[float64]float64{}
+
     if clone_from != nil {
         m.MachineData = clone_from.GetData()
-        m.step = 1/(LOOP*m.sampleRate)
+        m.step = 1/(LOOP*m.sample_rate)
     }
+
+    m.saves = make([]map[float64]float64, m.save_len)
+
     return nil
 }
 
@@ -75,7 +89,6 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
         in = strings.NewReader( m.imports[name] )
         new_words, new_imports, err := m.read( in )
 
-        fmt.Println(name, new_words)
         if err != nil {
             return err
         }
@@ -394,8 +407,14 @@ func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
 }
 
 func (m *OpcodeMachine) Run() ([]float64, error) {
-    output, _, err := m.RunCode(m.code, m.iter)
     m.iter += 1
+    m.save_ptr -= 1
+    if m.save_ptr < 0 {
+        m.save_ptr += m.save_len
+    }
+    m.saves[m.save_ptr] = nil
+
+    output, _, err := m.RunCode(m.code, m.iter)
     return output, err
 }
 
@@ -516,31 +535,54 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     /* Memory */
 
                     case W_PEEK:
-                        _, ok := m.saves[m.iter]
+                        if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
+                            return output, stack, fmt.Errorf("Runtime error: word before ? was not a save name")
+                        }
+
+                        val, ok := m.saves[m.save_ptr][stack[top]]
                         if ok {
-                            val, okk := m.saves[m.iter][stack[top]]
-                            if okk {
-                                stack[top] = val
-                            } else {
-                                return output, stack, fmt.Errorf("Runtime error: nothing at address %d", stack[top])                            
-                            }
+                            stack[top] = val
                         } else {
-                            return output, stack, fmt.Errorf("Runtime error: nothing saved for iteration %d", m.iter)                            
+                            return output, stack, fmt.Errorf("Runtime error: nothing at address %d at ptr %d", stack[top], m.save_ptr)
+                        }
+
+                    case W_OLD:
+                        pop, stack = stack[top], stack[:top]
+                        top -= 1
+
+                        old_ptr := (m.save_ptr + int(pop)) % m.save_len
+
+                        if old_ptr >= len(m.saves) || old_ptr < 0 {
+                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %s but save_len is %s", old_ptr, m.save_len)
+                        }
+
+                        if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
+                            return output, stack, fmt.Errorf("Runtime error: bad save name passed to OLD")
+                        }
+
+                        val, ok := m.saves[old_ptr][stack[top]]
+                        //fmt.Printf("Looked at address %d at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
+                        if ok {
+                            stack[top] = val
+                        } else {
+                            stack[top] = 0
                         }
 
                     case W_POKE:
-                        _, ok := m.saves[m.iter]
-                        if !ok {
-                            m.saves[m.iter] = map[float64]float64{}
+                        if m.save_ptr >= len(m.saves) || m.save_ptr < 0 {
+                            return output, stack, fmt.Errorf("Runtime error: tried to save ptr %s but save_len is %s", m.save_ptr, len(m.saves),m.save_len)
+                        }
+                        if m.saves[m.save_ptr] == nil {
+                            m.saves[m.save_ptr] = map[float64]float64{}
                         }
 
-                        _, okk := m.saves[m.iter][stack[top]]
-                        if okk {
+                        _, ok := m.saves[m.save_ptr][stack[top]]
+                        if ok {
                             return output, stack, fmt.Errorf("Runtime error: address %d already in use", stack[top])                            
                         } else {
                             pop, stack = stack[top], stack[:top]
                             top -= 1
-                            m.saves[m.iter][pop] = stack[top]
+                            m.saves[m.save_ptr][pop] = stack[top]
                         }
 
                     /* Forth words */
@@ -695,10 +737,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         stack[top] *= BPM * phase
 
                     case W_S:
-                        stack[top] /= SEC
+                        stack[top] *= m.sample_rate
 
                     case W_T:
-                        stack = append(stack, phase)
+                        stack = append(stack, float64(m.iter))
                         top += 1
 
                     case W_ON:

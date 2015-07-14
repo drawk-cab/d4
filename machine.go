@@ -4,7 +4,8 @@ import "io"
 
 type MachineData struct {
     iter int64
-    sampleRate float64
+    sample_rate float64
+    save_len int
     clip float64
     imports map[string]string
 }

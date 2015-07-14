@@ -19,7 +19,7 @@ func chk(err error) {
 func test(t *testing.T, name string, code string, expect_error bool, expect []float64, debug bool) {
     DEBUG = debug
 
-    machine, err := NewMachineString(code, 22050, 1, TEST_IMPORTS)
+    machine, err := NewMachineString(code, 22050, 1.0, 1, TEST_IMPORTS)
     if err == nil {
         test_machine(t, name, machine, expect_error, expect)
     } else {
@@ -37,7 +37,7 @@ func test_file(t *testing.T, name string, filename string, expect_error bool, ex
         panic(err)
     }
     in := bufio.NewReader( opened_file )
-    machine, err := NewMachine(in, 22050, 1, TEST_IMPORTS)
+    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS)
 
     if err == nil {
         test_machine(t, name, machine, expect_error, expect)
@@ -74,7 +74,7 @@ func test_machine(t *testing.T, name string, machine Machine, expect_error bool,
     return
 }
 
-func test_fill32(t *testing.T, name string, filename string, expect_error bool, buf_size int, workers int) {
+func test_fill32(t *testing.T, name string, filename string, expect_error bool, expect []float32, buf_size int, workers int) {
     DEBUG = false
 
     opened_file, err := os.OpenFile(filename, os.O_RDONLY, 0755)
@@ -83,7 +83,7 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     }
 
     in := bufio.NewReader( opened_file )
-    machine, err := NewMachine(in, 22050, 1, TEST_IMPORTS)
+    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS)
     if err != nil {
         panic(err)
     }
@@ -100,6 +100,15 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     } else {
         if err == nil && expect_error {
             t.Errorf("%s (fill32) : expected an error but didn't get one", name)
+        }
+    }
+
+    if expect != nil {
+        for i, buf_i := range buf {    
+            if buf_i != expect[i] {
+                t.Errorf("%s : result %f, want %f", name, buf, expect)
+                return
+            }
         }
     }
 
@@ -292,12 +301,22 @@ func TestConstantAlreadyDefined(t *testing.T) {
     )
 }
 
+func TestOld(t *testing.T) {
+    test( t,  "old",
+              "1 1 hz + dup. save a! a 0.1s old .",
+              false, []float64{1, 0},
+              false,
+    )
+    // old value is before the beginning of time hence 0
+    // TODO actually test the old value after running a bit
+}
 
+/*
 const BENCHMARK_FILE = "tests/gloucester.d4"
 
 func TestFile(t *testing.T) {
     test_file( t,  "benchmark-validate",
-              "tests/gloucester.d4",
+              BENCHMARK_FILE,
               false, []float64{},
               true,
     )
@@ -305,8 +324,8 @@ func TestFile(t *testing.T) {
 
 func TestBenchmark(t *testing.T) {
     test_fill32( t,  "benchmark-single",
-              "tests/gloucester.d4",
-              false,
+              BENCHMARK_FILE,
+              false, nil,
               100000,
               1,
     )
@@ -314,9 +333,10 @@ func TestBenchmark(t *testing.T) {
 
 func TestBenchmarkParallel(t *testing.T) {
     test_fill32( t,  "benchmark-parallel-4",
-              "tests/gloucester.d4",
-              false,
+              BENCHMARK_FILE,
+              false, nil,
               100000,
               4,
     )
 }
+*/
