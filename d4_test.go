@@ -125,9 +125,17 @@ func TestEmpty(t *testing.T) {
     )
 }
 
-func TestPush(t *testing.T) {
-    test( t,  "push",
+func TestOutput(t *testing.T) {
+    test( t,  "output",
               "47.3 .",
+              false, []float64{47.3},
+              false,
+    )
+}
+
+func TestDupOutput(t *testing.T) {
+    test( t,  "dup-output",
+              "47.3 & drop",
               false, []float64{47.3},
               false,
     )

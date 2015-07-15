@@ -525,6 +525,8 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         pop, stack = stack[top], stack[:top]
                         top -= 1
                         output = append(output, pop)
+                    case W_DUP_OUTPUT:
+                        output = append(output, stack[top])
                     case W_CLIP:
                         pop, stack = stack[top], stack[:top]
                         m.clip = pop
@@ -613,6 +615,9 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                     case W_DELTA:
+                        /* Skip back by the number of workers, as we can't guarantee 
+                           intervening samples have been filled in yet */
+
                         old_ptr := (m.save_ptr + m.workers) % m.save_len
 
                         if old_ptr >= len(m.saves) || old_ptr < 0 {
@@ -817,6 +822,15 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                             stack[top-2] = 0
                             top -= 2
                         }
+
+                    case W_PREWARP:
+                        /* This value is useful for making filters with true cutoff frequency.
+                           Use DELTA to get the previous sample.
+                           Note effective sample rate == sample rate / workers,
+                           because DELTA depends on the number of workers
+                        */
+
+                        stack[top] = math.Tan(math.Pi * stack[top] * float64(m.workers) / m.sample_rate)
 
                     /* intervals */
 

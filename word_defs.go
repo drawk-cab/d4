@@ -11,6 +11,7 @@ const W_NOOP = 0xff
 const W_NUMBER = 0xf0 // used to signal the next item is a number not an opcode
 const W_OUTPUT = 0xf1
 const W_CLIP = 0xf2
+const W_DUP_OUTPUT = 0xf3
 
 const W_EOF = 0x00 // stop
 
@@ -80,12 +81,14 @@ const W_SAW = 0x82
 const W_TR = 0x83
 const W_PULSE = 0x84
 const W_SQ = 0x85
+const W_PREWARP = 0x86
 
 var WORDS = map[string]Word{
 
     "NOOP":     Word{ "NOOP", W_NOOP, false, 0 },
     "LITERAL":  Word{ "NOOP", W_NOOP, false, 0 }, // merely to allow [ ] LITERAL to work like in forth
     ".":        Word{ ".", W_OUTPUT, false, 1 },
+    "&":        Word{ "&", W_DUP_OUTPUT, false, 1 },
     "CLIP":     Word{ "CLIP", W_CLIP,   false, 1 },
 
     "(":        Word{ "(", W_BEGIN_COMMENT,  false, 0 },
@@ -143,12 +146,16 @@ var WORDS = map[string]Word{
     "S":        Word{ "S", W_S,    true, 1 },
 
     "FLAT":     Word{ "FLAT", W_FLAT,    false, 1 },
+    "♭":        Word{ "FLAT", W_FLAT,    false, 1 },
     "SHARP":    Word{ "SHARP", W_SHARP,    false, 1 },
-    "#":        Word{ "#", W_SHARP,    false, 1 },
+    "#":        Word{ "SHARP", W_SHARP,    false, 1 },
+    "♯":        Word{ "SHARP", W_SHARP,    false, 1 },
     "HIGH":     Word{ "HIGH", W_HIGH,    false, 1 },
-    "'":        Word{ "'", W_HIGH,    false, 1 },
+    "'":        Word{ "HIGH", W_HIGH,    false, 1 },
+    "↑":        Word{ "HIGH", W_HIGH,    false, 1 },
     "LOW":      Word{ "LOW", W_LOW,    false, 1 },
-    "_":        Word{ "_", W_LOW,    false, 1 },
+    "_":        Word{ "LOW", W_LOW,    false, 1 },
+    "↓":        Word{ "LOW", W_LOW,    false, 1 },
 
     "ON":       Word{ "ON", W_ON,    false, 3 },
 
@@ -158,4 +165,5 @@ var WORDS = map[string]Word{
     "TR":       Word{ "TR", W_TR,    true, 1 },
     "PULSE":    Word{ "PULSE", W_PULSE,    true, 2 },
     "SQ":       Word{ "SQ", W_SQ,    true, 1 },
+    "PREWARP":  Word{ "PREWARP", W_PREWARP,  false, 1 },
 }

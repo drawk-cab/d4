@@ -34,7 +34,9 @@ Use `KEEP` to define a value to be used later: `75 KEEP my_var` Retrieve with `m
 `KEEP`d values are evaluated at runtime but are fixed once set.
 (`KEEP` is less confusing than `CONSTANT`, as values may vary from one iteration to the next)
 
-**TODO** `KEEP`d values can be accessed in later iterations using `LATEST` or `OLD`.
+`KEEP`d values can be accessed in later iterations using `OLD`.
+
+You can build filters using `DELTA` and `PREWARP`.
 
 The word `.` pops the value off the top of the stack and adds it to an output stack ready to be returned.
 
@@ -56,7 +58,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 * `ROT` ( x y z -- y z x )
 * `DMOD` ( number, modulus -- remainder, floor ) : standard Forth `/MOD`
 * `CONSTANT`
-* `!` `?`
+* `!` `@` `?`
 
 ## Built-in units
 
@@ -70,9 +72,11 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 * `.` : remove the item on top of stack (TOS) and add it to the output stack
 
+* `&` === `DUP .` *i.e.* add the item on TOS to the output stack without removing it from the stack
+
 * `NOOP` : noop
 
-* **TODO** `T` : iteration number
+* `T` : iteration number
 
 * `ON` ( schedule_t, duration, base_t -- 0 or age, 1 ) : Is the note of length `duration` scheduled for `schedule_t` currently in progress at time `base_t`, and if so, how old is it?
 
@@ -82,27 +86,27 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
     _example_ `T 1S 4 DMOD FROM play_c play_d play_e play_f CHOOSE` will execute `play_c` in the first second, `play_d` in the second, and so on. Because of the `DMOD`, the age of each note will be on TOS for the play routines.
 
-    **TODO** currently nested `FROM`...`CHOOSE` are not working
-
 * `KEEP x` === `CONSTANT x !`
 
-* **TODO** `OLD` ( definition_name time -- value ) : get the value saved under `definition_name` in the iteration the specified time ago
+* `OLD` ( definition_name time -- value ) : get the value saved under `definition_name` in the iteration the specified time ago
 
-* **TODO** `LATEST` ( definition_name -- value ) : get the value saved under `definition_name` in the previous iteration.
+    _example_ `my_var 0.3s OLD`
 
-* **TODO** `DELTA` (value -- d(value) ) : get the difference between the current value and the value supplied to `DELTA` in the previous iteration (via an anonymous variable)
+* `DELTA` ( definition_name -- delta ) : get the difference between the current value of `definition_name` and its value in a previous iteration. Useful for implementing filters.
+
+* `PREWARP` ( freq -- prewarp_freq ) : Evaluate **tan**( π `freq` / *samplerate* ) , useful for implementing filters.
 
 
 * `::`...`;` : import pre-set definition packages
 
-    _example_ `:: scale timing ;` will import the `scale` package (defines the equal tempered scale)
-    and the `timing` package (provides some helpful words for working with time intervals)
+    _example_ `:: scale divisions;` will import the `scale` package (defines the equal tempered scale)
+    and the `divisions` package
 
 ## Musical words
 
-* `#`, `SHARP` ( freq -- freq ) : Sharpen a frequency by 1 semitone (equal tempered)
+* `#`, `SHARP`, `♯` ( freq -- freq ) : Sharpen a frequency by 1 semitone (equal tempered)
 
-* `FLAT` ( freq -- freq ) : Flatten a frequency by 1 semitone (equal tempered)
+* `FLAT`, `♭` ( freq -- freq ) : Flatten a frequency by 1 semitone (equal tempered)
 
 * `SIN` ( counter -- pcm ) : Sine wave oscillator
 
