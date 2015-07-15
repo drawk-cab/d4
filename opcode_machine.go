@@ -483,7 +483,12 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
         switch mode {
             case M_IF_FALSE:
                 switch w {
+                    case W_NUMBER:
+                        code_ptr += 1 // don't accidentally interpret 0 as EOF *doh*
                     case W_THEN:
+                        if len(mode_breadcrumb) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: THEN without preceding IF")
+                        }
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
@@ -493,6 +498,8 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
             case M_CHOOSE_FALSE:
                 switch w {
+                    case W_NUMBER:
+                        code_ptr += 1 // don't accidentally interpret 0 as EOF *doh*
                     case W_FROM:
                         // not going to execute, but still need to keep track of nested chooses
                         mode_breadcrumb = append(mode_breadcrumb, mode)
@@ -542,6 +549,9 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                     case W_THEN:
+                        if len(mode_breadcrumb) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: THEN without preceding IF")
+                        }
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
@@ -692,8 +702,8 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                             return output, stack, fmt.Errorf("Runtime error: divide by zero")
                         }
                         result, remainder := math.Modf( stack[top-1] / stack[top] )
+                        stack[top-1] = remainder * stack[top]
                         stack[top] = result
-                        stack[top-1] = remainder * pop
         
                     case W_EQUALS:
                         pop, stack = stack[top], stack[:top]

@@ -181,6 +181,14 @@ func TestDiv(t *testing.T) {
     )
 }
 
+func TestDmod(t *testing.T) {
+    test( t,  "dmod",
+              "163.5 4 DMOD . .",
+              false, []float64{40, 3.5},
+              false,
+    )
+}
+
 func TestSwap(t *testing.T) {
     test( t,  "swap",
               "47 21 SWAP . .",
@@ -225,6 +233,14 @@ func TestNestedIfElse(t *testing.T) {
     test( t,  "nested if-else",
               "4 11 10 > IF 11 10 > IF 1 . ELSE 2 . THEN ELSE 3 . THEN 11 10 < IF 1 . ELSE 11 10 < IF 2 . ELSE 3 . THEN THEN .",
               false, []float64{1, 3, 4},
+              false,
+    )
+}
+
+func TestZeroIfZero(t *testing.T) {
+    test( t,  "zero if zero",
+              "0 if 0 else 1 then .",
+              false, []float64{1},
               false,
     )
 }
