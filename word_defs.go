@@ -33,6 +33,8 @@ const W_VARIABLE = 0xd1
 const W_PEEK = 0xd2
 const W_POKE = 0xd3
 const W_OLD = 0xd4
+const W_KEEP = 0xd5
+const W_DELTA = 0xd6
 
 const W_FALSE = 0x01
 const W_TRUE = 0x02
@@ -100,12 +102,13 @@ var WORDS = map[string]Word{
     "[":        Word{ "[", W_BEGIN_LITERAL,  false, 0 },
     "]":        Word{ "]", W_END_LITERAL,  false, 0 },
 
-    "SAVE":     Word{ "CONSTANT", W_CONSTANT,  false, 1 }, // provide synonym as CONSTANT is
-    "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 1 }, // a bit confusing in this context
+    "KEEP":     Word{ "KEEP", W_KEEP,  false, 1 },
+    "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 1 },
     "VARIABLE": Word{ "VARIABLE", W_VARIABLE,  false, 1 },
-    "?":        Word{ "PEEK", W_PEEK,  true, 1 },
-    "!":        Word{ "POKE", W_POKE,  true, 1 },
-    "OLD":      Word{ "OLD", W_OLD, true, 1 },
+    "@":        Word{ "PEEK", W_PEEK,  true, 1 },
+    "!":        Word{ "POKE", W_POKE,  true, 2 },
+    "OLD":      Word{ "OLD", W_OLD, true, 2 },
+    "DELTA":    Word{ "DELTA", W_DELTA, true, 1 },
 
     "FALSE":    Word{ "FALSE", W_FALSE,    false, 0 },
     "TRUE":     Word{ "TRUE", W_TRUE,    false, 0 },

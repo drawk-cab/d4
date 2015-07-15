@@ -29,6 +29,7 @@ const M_IF_FALSE = 5
 const M_CHOOSE_FALSE = 6
 const M_LITERAL = 7
 const M_IMPORT = 8
+const M_KEEP = 9
 
 type OpcodeMachine struct {
     MachineData
@@ -41,7 +42,7 @@ type OpcodeMachine struct {
     opcode_info map[float64]Word
 }
 
-func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, imports map[string]string ) *OpcodeMachine {
+func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, imports map[string]string, workers int ) *OpcodeMachine {
 
     // import names are case insensitive and stored as capitals
     upper_imports := map[string]string{}
@@ -51,7 +52,7 @@ func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, import
 
     save_len := int(save_s * sample_rate)
 
-    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, upper_imports},
+    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, upper_imports, workers},
                           1/(LOOP*sample_rate), nil, nil, 1000, nil, save_len-1, nil}
 }
 
@@ -77,7 +78,12 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
 
 func (m *OpcodeMachine) Program( in io.Reader ) error {
 
-    words, need_imports, err := m.read(in)
+    words := map[string][]string{ "": []string{},
+                                  "?": []string{ "@", "." },
+                                }
+
+    words, need_imports, err := m.read( in, words )
+
     m.words = words
 
     if err != nil {
@@ -87,7 +93,7 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
     for _, name := range need_imports {
 
         in = strings.NewReader( m.imports[name] )
-        new_words, new_imports, err := m.read( in )
+        new_words, new_imports, err := m.read( in, nil )
 
         if err != nil {
             return err
@@ -127,11 +133,13 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
     return err
 }
 
-func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, error) {
+func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[string][]string, []string, error) {
+
+    if words == nil {
+        words = map[string][]string{}
+    }
 
     imports := []string{}
-
-    words := map[string][]string{ "": []string{} }
 
     scanner := bufio.NewScanner(in)
 
@@ -173,6 +181,15 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
 
                 mode = mode[:len(mode)-1]
 
+            case M_KEEP: // KEEP x === CONSTANT x !
+
+                words[w] = []string{strconv.Itoa(m.save_addr)} // everything is a string at this point
+                m.save_addr += 1
+
+                words[cur_word] = append(words[cur_word], w, "!")
+
+                mode = mode[:len(mode)-1]
+
             case M_DEF:
                 switch w {
                     case ":":
@@ -184,8 +201,10 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
                         mode = mode[:len(mode)-1]
                     case "(":
                         mode = append(mode, M_COMMENT)
-                    case "SAVE", "CONSTANT":
+                    case "CONSTANT":
                         mode = append(mode, M_CONSTANT)
+                    case "KEEP":
+                        mode = append(mode, M_KEEP)
                     default:
                         words[cur_word] = append(words[cur_word], w)
                 }
@@ -222,8 +241,10 @@ func (m *OpcodeMachine) read( in io.Reader ) (map[string][]string, []string, err
                         return words, imports, fmt.Errorf("Scan error: ; found outside definition")
                     case ")":
                         return words, imports, fmt.Errorf("Scan error: ) found outside comment")
-                    case "SAVE", "CONSTANT":
+                    case "CONSTANT":
                         mode = append(mode, M_CONSTANT)
+                    case "KEEP":
+                        mode = append(mode, M_KEEP)
                     default:
                         words[cur_word] = append(words[cur_word], w)
                 }
@@ -302,7 +323,7 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
                             // outside [], time to evaluate
                             literal = append(literal, W_EOF)
                             if DEBUG == true {
-                                fmt.Println("Evaluating",literal)
+                                fmt.Println("Evaluating literal:",literal)
                             }
                             literal_output, literal_stack, err := m.RunCode(literal,0)
                             if DEBUG == true {
@@ -342,20 +363,20 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
     return output, nil //TODO
 }
 
-func (m *OpcodeMachine) Fill32( buf []float32, workers int ) error {
-    if workers == 1 {
+func (m *OpcodeMachine) Fill32( buf []float32 ) error {
+    if m.workers == 1 {
         return m.fill32_single(buf)
     } else {
-        return m.fill32_parallel(buf, workers)
+        return m.fill32_parallel(buf)
     }
 }
 
-func (m *OpcodeMachine) fill32_parallel( buf []float32, workers int ) error {
+func (m *OpcodeMachine) fill32_parallel( buf []float32 ) error {
 
     jobs := make(chan *Job, len(buf))
     results := make(chan *JobResult, len(buf))
 
-    for w := 0; w <= workers; w++ {
+    for w := 0; w <= m.workers; w++ {
         go m.work()
     }
 
@@ -414,8 +435,17 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     }
     m.saves[m.save_ptr] = nil
 
-    output, _, err := m.RunCode(m.code, m.iter)
-    return output, err
+    output, stack, err := m.RunCode(m.code, m.iter)
+
+    if err != nil {
+        return output, err
+    }
+
+    if len(stack) != 0 {
+        return output, fmt.Errorf("Runtime error: stack not empty at end of run: %f", stack)
+    }
+
+    return output, nil
 }
 
 func (m *OpcodeMachine) work() (jobs chan *Job) {
@@ -438,8 +468,8 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
     var err error
     var pop float64
     var w_info Word
-    var choose_value int
-
+    
+    choose_value := []int{}
     code_ptr := 0
     top := -1
 
@@ -463,13 +493,18 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
             case M_CHOOSE_FALSE:
                 switch w {
+                    case W_FROM:
+                        // not going to execute, but still need to keep track of nested chooses
+                        mode_breadcrumb = append(mode_breadcrumb, mode)
+                        choose_value = append(choose_value, -1)
                     case W_CHOOSE:
+                        choose_value = choose_value[:len(choose_value)-1]
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
                     case W_CHOOSE_SEP:
-                        choose_value -= 1
-                        if choose_value == 0 {
+                        choose_value[len(choose_value)-1] -= 1
+                        if choose_value[len(choose_value)-1] == 0 {
                             mode = M_NORMAL
                         }
                 }
@@ -514,20 +549,29 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         mode = M_IF_FALSE
 
                     case W_FROM:
-                        choose_value, stack = int(stack[top]), stack[:top]
+                        var new_choose_value int
+                        new_choose_value, stack = int(stack[top]), stack[:top]
+                        choose_value = append(choose_value, new_choose_value)
                         top -= 1
                         mode_breadcrumb = append(mode_breadcrumb, mode)
-                        if choose_value != 0 {
+                        if new_choose_value != 0 {
                             mode = M_CHOOSE_FALSE
                         }
 
                     case W_CHOOSE_SEP:
-                        choose_value -= 1
-                        if choose_value != 0 {
+                        if len(choose_value) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: , outside FROM...CHOOSE")
+                        }
+                        choose_value[len(choose_value)-1] -= 1
+                        if choose_value[len(choose_value)-1] != 0 {
                             mode = M_CHOOSE_FALSE
                         }
 
                     case W_CHOOSE:
+                        if len(choose_value) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: CHOOSE without preceding FROM")
+                        }
+                        choose_value = choose_value[:len(choose_value)-1]
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
@@ -543,7 +587,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         if ok {
                             stack[top] = val
                         } else {
-                            return output, stack, fmt.Errorf("Runtime error: nothing at address %d at ptr %d", stack[top], m.save_ptr)
+                            return output, stack, fmt.Errorf("Runtime error: nothing at address %f at ptr %d", stack[top], m.save_ptr)
                         }
 
                     case W_OLD:
@@ -553,15 +597,34 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         old_ptr := (m.save_ptr + int(pop)) % m.save_len
 
                         if old_ptr >= len(m.saves) || old_ptr < 0 {
-                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %s but save_len is %s", old_ptr, m.save_len)
+                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %d but save_len is %d", old_ptr, m.save_len)
                         }
 
                         if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
-                            return output, stack, fmt.Errorf("Runtime error: bad save name passed to OLD")
+                            return output, stack, fmt.Errorf("Runtime error: bad save name %f passed to OLD", stack[top])
                         }
 
                         val, ok := m.saves[old_ptr][stack[top]]
-                        //fmt.Printf("Looked at address %d at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
+                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
+                        if ok {
+                            stack[top] = val
+                        } else {
+                            stack[top] = 0
+                        }
+
+                    case W_DELTA:
+                        old_ptr := (m.save_ptr + m.workers) % m.save_len
+
+                        if old_ptr >= len(m.saves) || old_ptr < 0 {
+                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %d but save_len is %d", old_ptr, m.save_len)
+                        }
+
+                        if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
+                            return output, stack, fmt.Errorf("Runtime error: bad save name %f passed to DELTA", stack[top])
+                        }
+
+                        val, ok := m.saves[old_ptr][stack[top]]
+                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
                         if ok {
                             stack[top] = val
                         } else {
@@ -570,7 +633,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                     case W_POKE:
                         if m.save_ptr >= len(m.saves) || m.save_ptr < 0 {
-                            return output, stack, fmt.Errorf("Runtime error: tried to save ptr %s but save_len is %s", m.save_ptr, len(m.saves),m.save_len)
+                            return output, stack, fmt.Errorf("Runtime error: tried to save ptr %d but save_len is %d", m.save_ptr, len(m.saves),m.save_len)
                         }
                         if m.saves[m.save_ptr] == nil {
                             m.saves[m.save_ptr] = map[float64]float64{}
@@ -578,11 +641,12 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                         _, ok := m.saves[m.save_ptr][stack[top]]
                         if ok {
-                            return output, stack, fmt.Errorf("Runtime error: address %d already in use", stack[top])                            
+                            return output, stack, fmt.Errorf("Runtime error: address %f already in use", stack[top])                            
                         } else {
-                            pop, stack = stack[top], stack[:top]
-                            top -= 1
-                            m.saves[m.save_ptr][pop] = stack[top]
+                            var plop float64
+                            plop, pop, stack = stack[top-1], stack[top], stack[:top-1]
+                            top -= 2
+                            m.saves[m.save_ptr][pop] = plop
                         }
 
                     /* Forth words */
@@ -710,9 +774,6 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     case W_ROT:
                         stack[top], stack[top-1], stack[top-2] = stack[top-2], stack[top], stack[top-1]
 
-                    case W_CONSTANT:
-                        mode = M_CONSTANT
-
                     case W_LOOP:
                         // TODO 
 
@@ -802,6 +863,12 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         } else {
                             stack[top] = -1
                         }
+
+                    /* Words removed at compile time */
+
+                    case W_CONSTANT, W_KEEP:
+                        return output, stack, fmt.Errorf("Runtime error: %s not pre-evaluated", w_info.name)
+
 
                     default:
                         return output, stack, fmt.Errorf("Runtime error: unknown opcode %d", w)

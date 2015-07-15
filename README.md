@@ -29,12 +29,12 @@ The iteration number is available in the built-in word `T`.
 Built-in words `S`, `BPM`, `HZ` convert `T` to time units based
 on a supplied sample rate (default 22050)
 
-Use `SAVE`...`!` to define a value to be used later: `75 SAVE my_var!` Retrieve with `my_var?`
+Use `KEEP` to define a value to be used later: `75 KEEP my_var` Retrieve with `my_var?`
 
-`SAVE`d values are evaluated at runtime but are fixed once set.
-(This is a synonym for `CONSTANT` but `SAVE` is less confusing, as values may vary from one iteration to the next)
+`KEEP`d values are evaluated at runtime but are fixed once set.
+(`KEEP` is less confusing than `CONSTANT`, as values may vary from one iteration to the next)
 
-**TODO** `SAVE`d values can be accessed in later iterations using `LATEST` or `OLD`.
+**TODO** `KEEP`d values can be accessed in later iterations using `LATEST` or `OLD`.
 
 The word `.` pops the value off the top of the stack and adds it to an output stack ready to be returned.
 
@@ -84,7 +84,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
     **TODO** currently nested `FROM`...`CHOOSE` are not working
 
-* `SAVE` === `CONSTANT`
+* `KEEP x` === `CONSTANT x !`
 
 * **TODO** `OLD` ( definition_name time -- value ) : get the value saved under `definition_name` in the iteration the specified time ago
 

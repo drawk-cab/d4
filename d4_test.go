@@ -19,12 +19,12 @@ func chk(err error) {
 func test(t *testing.T, name string, code string, expect_error bool, expect []float64, debug bool) {
     DEBUG = debug
 
-    machine, err := NewMachineString(code, 22050, 1.0, 1, TEST_IMPORTS)
+    machine, err := NewMachineString(code, 22050, 1.0, 1, TEST_IMPORTS, 1)
     if err == nil {
         test_machine(t, name, machine, expect_error, expect)
     } else {
         if !expect_error {
-            t.Errorf("unexpected compile error", err)
+            t.Errorf("%s: unexpected compile error: ", name, err)
         }
     }
 }
@@ -37,13 +37,13 @@ func test_file(t *testing.T, name string, filename string, expect_error bool, ex
         panic(err)
     }
     in := bufio.NewReader( opened_file )
-    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS)
+    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS, 1)
 
     if err == nil {
         test_machine(t, name, machine, expect_error, expect)
     } else {
         if !expect_error {
-            t.Errorf("unexpected compile error", err)
+            t.Errorf("unexpected compile error %s", err)
         }
     }
 }
@@ -52,7 +52,7 @@ func test_machine(t *testing.T, name string, machine Machine, expect_error bool,
     result, err := machine.Run()
 
     if err != nil && !expect_error {
-        t.Errorf("%s : unexpected runtime error", name, err)
+        t.Errorf("%s : unexpected runtime error: %s", name, err)
     } else {
         if err == nil && expect_error {
             t.Errorf("%s : expected an error but didn't get one", name)
@@ -83,7 +83,7 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     }
 
     in := bufio.NewReader( opened_file )
-    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS)
+    machine, err := NewMachine(in, 22050, 1.0, 1, TEST_IMPORTS, workers)
     if err != nil {
         panic(err)
     }
@@ -92,7 +92,7 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     buf := make([]float32, buf_size)
 
     then := time.Now()
-    err = machine.Fill32(buf, workers)
+    err = machine.Fill32(buf)
     elapsed := time.Since(then)
 
     if err != nil && !expect_error {
@@ -129,6 +129,14 @@ func TestPush(t *testing.T) {
     test( t,  "push",
               "47.3 .",
               false, []float64{47.3},
+              false,
+    )
+}
+
+func TestLeftovers(t *testing.T) {
+    test( t,  "leftovers",
+              "47.3",
+              true, nil,
               false,
     )
 }
@@ -221,6 +229,14 @@ func TestChoose(t *testing.T) {
     )
 }
 
+func TestNestedChoose(t *testing.T) {
+    test( t,  "choose",
+              "3 FROM 7, 8, 9, 3 FROM 10, 1 FROM 99, 100 CHOOSE, 12, 1 FROM 20, 0 FROM 31 CHOOSE, 21 CHOOSE CHOOSE, 13, 14 CHOOSE .",
+              false, []float64{31},
+              false,
+    )
+}
+
 func TestOscillators(t *testing.T) {
     test( t,  "oscillators",
               "0.25 SIN . 0.25 SAW . 0.25 SQ . 0.25 TR .",
@@ -279,7 +295,15 @@ func TestImport(t *testing.T) {
 
 func TestConstant(t *testing.T) {
     test( t,  "constant",
-              ":a 47 constant b! 11 +; a. b?. b.",
+              ":a 47 dup constant b! 11 +; a. b? b.",
+              false, []float64{58, 47, 1000},
+              false,
+    )
+}
+
+func TestKeep(t *testing.T) {
+    test( t,  "keep",
+              ":a 47 dup keep b 11 +; a. b? b.",
               false, []float64{58, 47, 1000},
               false,
     )
@@ -303,12 +327,20 @@ func TestConstantAlreadyDefined(t *testing.T) {
 
 func TestOld(t *testing.T) {
     test( t,  "old",
-              "1 1 hz + dup. save a! a 0.1s old .",
-              false, []float64{1, 0},
+              "1 t+ dup. keep a a 1 old .",
+              false, []float64{2, 0},
               false,
     )
-    // old value is before the beginning of time hence 0
+    // old value is before the beginning of time hence 0 (t starts at 1)
     // TODO actually test the old value after running a bit
+}
+
+func TestDelta(t *testing.T) {
+    test( t,  "old",
+              "1 t+ dup. keep a a delta .",
+              false, []float64{2, 0},
+              false,
+    )
 }
 
 /*

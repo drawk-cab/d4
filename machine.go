@@ -8,6 +8,7 @@ type MachineData struct {
     save_len int
     clip float64
     imports map[string]string
+    workers int
 }
 
 type Machine interface {
@@ -15,6 +16,6 @@ type Machine interface {
     Program(io.Reader) (error)
     Run() ([]float64, error)
     RunCode([]float64, int64) ([]float64, []float64, error)
-    Fill32([]float32, int) error
+    Fill32([]float32) error
     GetData() MachineData
 }
