@@ -1,8 +1,10 @@
 # d4
 Diminished Forth definition and interpreter
 
-This is the tiny language floatbeat uses to define sounds, designed for 
-fun and fast live coding of music, inspired by Forth.
+This is the tiny language [floatbeat](http://github.com/colourcountry/floatbeat) uses to define sounds, designed for 
+fun and fast live coding of music.
+
+It's a stack based language similar to Forth.
 
 ## Principles
 
