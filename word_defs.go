@@ -82,6 +82,7 @@ const W_TR = 0x83
 const W_PULSE = 0x84
 const W_SQ = 0x85
 const W_PREWARP = 0x86
+const W_NOISE = 0x87
 
 var WORDS = map[string]Word{
 
@@ -166,4 +167,5 @@ var WORDS = map[string]Word{
     "PULSE":    Word{ "PULSE", W_PULSE,    true, 2 },
     "SQ":       Word{ "SQ", W_SQ,    true, 1 },
     "PREWARP":  Word{ "PREWARP", W_PREWARP,  false, 1 },
+    "NOISE":       Word{ "NOISE", W_NOISE,  false, 0 },
 }

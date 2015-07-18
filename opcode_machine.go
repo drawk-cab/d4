@@ -3,6 +3,7 @@ package d4
 import (
     "strings"
     "math"
+    "math/rand"
     "fmt"
     "strconv"
     "bufio"
@@ -393,6 +394,8 @@ func (m *OpcodeMachine) fill32_parallel( buf []float32 ) error {
 
         r := float64(0)
         for _, s := range result.value {
+            if s < -1 { s = -1 }
+            if s > 1  { s = 1 }
             r += s
         }
         buf[result.id] = float32( r / m.clip )
@@ -416,6 +419,8 @@ func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
 
         r := float64(0)
         for _, s := range output {
+            if s < -1 { s = -1 }
+            if s > 1  { s = 1 }
             r += s
         }
 
@@ -536,6 +541,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         output = append(output, stack[top])
                     case W_CLIP:
                         pop, stack = stack[top], stack[:top]
+                        top -= 1
                         m.clip = pop
 
                     /* Runtime control */
@@ -860,7 +866,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         stack[top] = math.Sin(frac * 2 * math.Pi)
 
                     case W_SAW:
-                        stack[top] = math.Mod(stack[top] * 2, 2) - 1
+                        stack[top] = 1 - math.Mod(stack[top]* 2, 2)
 
                     case W_TR:
                         _, frac := math.Modf(stack[top])
@@ -887,6 +893,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         } else {
                             stack[top] = -1
                         }
+
+                    case W_NOISE:
+                        stack = append(stack, rand.Float64())
+                        top += 1
 
                     /* Words removed at compile time */
 

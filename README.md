@@ -72,7 +72,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 ## Extra words
 
-* `.` : remove the item on top of stack (TOS) and add it to the output stack
+* `.` : remove the item on top of stack (TOS) and add it to the output stack (clipped to -1..+1)
 
 * `&` === `DUP .` *i.e.* add the item on TOS to the output stack without removing it from the stack
 
@@ -82,7 +82,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 * `ON` ( schedule_t, duration, base_t -- 0 or age, 1 ) : Is the note of length `duration` scheduled for `schedule_t` currently in progress at time `base_t`, and if so, how old is it?
 
-    _example_ `1S 0.5S T ON IF 440HZ SIN THEN` plays an A for 0.5 sec, 1 sec after the start.
+    _example_ `1S 0.5S T ON IF 440HZ SIN. THEN` plays an A for 0.5 sec, 1 sec after the start.
 
 * `FROM`...`CHOOSE` : treat TOS as a pointer and execute the word with that index between `FROM` and `CHOOSE` . So `2 FROM a b c d CHOOSE` would execute only `c` because `c` has index 2 in the set.
 
@@ -120,9 +120,11 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 * `SQ` ( freq -- pcm ) === `0.5 PULSE` : Square wave oscillator
 
-* `TR` ( freq -- pcm ) : Triangle wave oscillator* 
+* `TR` ( freq -- pcm ) : Triangle wave oscillator
+
+* `NOISE` ( -- pcm ) : White noise source
 
 * `CLIP` ( n ) : When outputting to a buffer (sound hardware...), scale the results down by this factor.
 
-    _example_ `A SIN C SIN 2 CLIP` will scale down the 2 notes so they fit into -1...+1
+    _example_ `A SIN. C SIN. 2 CLIP` will scale down the 2 notes so they fit into -1...+1
 
