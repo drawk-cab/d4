@@ -108,7 +108,8 @@ var WORDS = map[string]Word{
     "]":        Word{ "]", W_END_LITERAL,  false, 0 },
 
     "KEEP":     Word{ "KEEP", W_KEEP,  false, 1 },
-    "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 1 },
+    "CONSTANT": Word{ "CONSTANT", W_CONSTANT,  false, 0 },
+    "CONTROL":  Word{ "CONSTANT", W_CONSTANT,  false, 0 }, // CONSTANTs are confusingly not constant, provide a synonym
     "VARIABLE": Word{ "VARIABLE", W_VARIABLE,  false, 1 },
     "@":        Word{ "PEEK", W_PEEK,  true, 1 },
     "!":        Word{ "POKE", W_POKE,  true, 2 },

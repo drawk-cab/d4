@@ -39,6 +39,7 @@ type OpcodeMachine struct {
     words map[string][]string
     save_addr int
     saves []map[float64]float64
+    control_keys map[string]float64
     save_ptr int
     opcode_info map[float64]Word
 }
@@ -53,8 +54,8 @@ func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, import
 
     save_len := int(save_s * sample_rate)
 
-    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, upper_imports, workers},
-                          1/(LOOP*sample_rate), nil, nil, 1000, nil, save_len-1, nil}
+    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, nil, upper_imports, workers},
+                          1/(LOOP*sample_rate), nil, nil, 1000, nil, nil, save_len-1, nil}
 }
 
 func (m *OpcodeMachine) GetData() MachineData {
@@ -70,10 +71,19 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
     if clone_from != nil {
         m.MachineData = clone_from.GetData()
         m.step = 1/(LOOP*m.sample_rate)
+    } else {
+        m.controls = map[string]float64{}
     }
+
+    m.control_keys = map[string]float64{}
 
     m.saves = make([]map[float64]float64, m.save_len)
 
+    return nil
+}
+
+func (m *OpcodeMachine) Set( control string, value float64 ) error {
+    m.controls[strings.ToUpper(control)] = value
     return nil
 }
 
@@ -176,6 +186,16 @@ func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[str
             case M_CONSTANT:
 
                 words[w] = []string{strconv.Itoa(m.save_addr)} // everything is a string at this point
+                m.control_keys[w] = float64(m.save_addr)
+                _, exists := m.controls[w]
+                if !exists {
+                    m.controls[w] = 0
+                }
+
+                if DEBUG {
+                    fmt.Println("Assigning addr",m.save_addr,"to control",w," (current value",m.controls[w],")")
+                }
+
                 m.save_addr += 1
 
                 words[cur_word] = append(words[cur_word], w)
@@ -184,7 +204,7 @@ func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[str
 
             case M_KEEP: // KEEP x === CONSTANT x !
 
-                words[w] = []string{strconv.Itoa(m.save_addr)} // everything is a string at this point
+                words[w] = []string{strconv.Itoa(m.save_addr)}
                 m.save_addr += 1
 
                 words[cur_word] = append(words[cur_word], w, "!")
@@ -202,7 +222,7 @@ func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[str
                         mode = mode[:len(mode)-1]
                     case "(":
                         mode = append(mode, M_COMMENT)
-                    case "CONSTANT":
+                    case "CONSTANT", "CONTROL":
                         mode = append(mode, M_CONSTANT)
                     case "KEEP":
                         mode = append(mode, M_KEEP)
@@ -438,7 +458,11 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     if m.save_ptr < 0 {
         m.save_ptr += m.save_len
     }
-    m.saves[m.save_ptr] = nil
+
+    m.saves[m.save_ptr] = map[float64]float64{}
+    for k,v := range m.controls {
+        m.saves[m.save_ptr][m.control_keys[k]] = v
+    }
 
     output, stack, err := m.RunCode(m.code, m.iter)
 

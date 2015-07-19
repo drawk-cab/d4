@@ -31,6 +31,7 @@ func NewMachine(in io.Reader, sample_rate float64, save_s float64,
 func CloneMachine(in io.Reader, m Machine) (Machine, error) {
     s := NewOpcodeMachine(0, 0, 0, nil, 0)
     s.Init(m)
+
     err := s.Program(in)
     return s, err
 }
