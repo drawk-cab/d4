@@ -40,7 +40,6 @@ type OpcodeMachine struct {
     save_addr int
     saves []map[float64]float64
     control_keys map[string]float64
-    save_ptr int
     opcode_info map[float64]Word
 }
 
@@ -54,8 +53,12 @@ func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, import
 
     save_len := int(save_s * sample_rate)
 
+    if (save_len < 2*workers) {
+        save_len = 2*workers // must have this many samples stored to be able to figure out delta
+    }
+    
     return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, nil, upper_imports, workers},
-                          1/(LOOP*sample_rate), nil, nil, 1000, nil, nil, save_len-1, nil}
+                          1/(LOOP*sample_rate), nil, nil, 1000, nil, nil, nil}
 }
 
 func (m *OpcodeMachine) GetData() MachineData {
@@ -77,7 +80,7 @@ func (m *OpcodeMachine) Init(clone_from Machine) error {
 
     m.control_keys = map[string]float64{}
 
-    m.saves = make([]map[float64]float64, m.save_len)
+    m.saves = make([]map[float64]float64, m.save_len + 1)
 
     return nil
 }
@@ -346,7 +349,7 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
                             if DEBUG == true {
                                 fmt.Println("Evaluating literal:",literal)
                             }
-                            literal_output, literal_stack, err := m.RunCode(literal,0)
+                            literal_output, literal_stack, err := m.RunCode(literal,-1)
                             if DEBUG == true {
                                 fmt.Println("Replacing with",literal_stack)
                             }
@@ -428,7 +431,7 @@ func (m *OpcodeMachine) fill32_parallel( buf []float32 ) error {
 func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
     var output []float64
     var err error
-
+    
     for i := range buf {
 
         output, err = m.Run()
@@ -454,14 +457,11 @@ func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
 
 func (m *OpcodeMachine) Run() ([]float64, error) {
     m.iter += 1
-    m.save_ptr -= 1
-    if m.save_ptr < 0 {
-        m.save_ptr += m.save_len
-    }
+    save_ptr := m.save_len - int(m.iter % int64(m.save_len))
 
-    m.saves[m.save_ptr] = map[float64]float64{}
+    m.saves[save_ptr] = map[float64]float64{}
     for k,v := range m.controls {
-        m.saves[m.save_ptr][m.control_keys[k]] = v
+        m.saves[save_ptr][m.control_keys[k]] = v
     }
 
     output, stack, err := m.RunCode(m.code, m.iter)
@@ -492,6 +492,8 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
     output := []float64{}
     stack := []float64{}
     
+    save_ptr := m.save_len - int(m.iter % int64(m.save_len))
+
     _, phase := math.Modf( float64(m.iter) * m.step )
 
     var err error
@@ -510,35 +512,20 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
     for w != W_EOF {
         w_info = m.opcode_info[w]
         switch mode {
-            case M_IF_FALSE:
-                switch w {
-                    case W_NUMBER:
-                        code_ptr += 1 // don't accidentally interpret 0 as EOF *doh*
-                    case W_THEN:
-                        if len(mode_breadcrumb) < 1 {
-                            return output, stack, fmt.Errorf("Runtime error: THEN without preceding IF")
-                        }
-                        var old_mode int
-                        old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
-                        mode = old_mode
-                    case W_ELSE:
-                        mode = M_NORMAL
-                }
-
             case M_CHOOSE_FALSE:
                 switch w {
                     case W_NUMBER:
                         code_ptr += 1 // don't accidentally interpret 0 as EOF *doh*
-                    case W_FROM:
+                    case W_FROM, W_IF:
                         // not going to execute, but still need to keep track of nested chooses
                         mode_breadcrumb = append(mode_breadcrumb, mode)
                         choose_value = append(choose_value, -1)
-                    case W_CHOOSE:
+                    case W_CHOOSE, W_THEN:
                         choose_value = choose_value[:len(choose_value)-1]
                         var old_mode int
                         old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
                         mode = old_mode
-                    case W_CHOOSE_SEP:
+                    case W_CHOOSE_SEP, W_ELSE:
                         choose_value[len(choose_value)-1] -= 1
                         if choose_value[len(choose_value)-1] == 0 {
                             mode = M_NORMAL
@@ -570,29 +557,19 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                     /* Runtime control */
 
-                    case W_IF:
-                        pop, stack = stack[top], stack[:top]
-                        top -= 1
-                        mode_breadcrumb = append(mode_breadcrumb, mode)
-                        if pop == 0 {
-                            mode = M_IF_FALSE
-                        }
-
-                    case W_THEN:
-                        if len(mode_breadcrumb) < 1 {
-                            return output, stack, fmt.Errorf("Runtime error: THEN without preceding IF")
-                        }
-                        var old_mode int
-                        old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
-                        mode = old_mode
-
-                    case W_ELSE:
-                        // Must have been executing an IF clause, skip to THEN
-                        mode = M_IF_FALSE
-
                     case W_FROM:
                         var new_choose_value int
                         new_choose_value, stack = int(stack[top]), stack[:top]
+                        choose_value = append(choose_value, new_choose_value)
+                        top -= 1
+                        mode_breadcrumb = append(mode_breadcrumb, mode)
+                        if new_choose_value != 0 {
+                            mode = M_CHOOSE_FALSE
+                        }
+
+                    case W_IF:
+                        var new_choose_value int
+                        new_choose_value, stack = 1-int(stack[top]), stack[:top]
                         choose_value = append(choose_value, new_choose_value)
                         top -= 1
                         mode_breadcrumb = append(mode_breadcrumb, mode)
@@ -609,9 +586,27 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                             mode = M_CHOOSE_FALSE
                         }
 
+                    case W_ELSE:
+                        if len(choose_value) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: ELSE outside IF...THEN")
+                        }
+                        choose_value[len(choose_value)-1] -= 1
+                        if choose_value[len(choose_value)-1] != 0 {
+                            mode = M_CHOOSE_FALSE
+                        }
+
                     case W_CHOOSE:
                         if len(choose_value) < 1 {
                             return output, stack, fmt.Errorf("Runtime error: CHOOSE without preceding FROM")
+                        }
+                        choose_value = choose_value[:len(choose_value)-1]
+                        var old_mode int
+                        old_mode, mode_breadcrumb = mode_breadcrumb[len(mode_breadcrumb)-1], mode_breadcrumb[:len(mode_breadcrumb)-1]
+                        mode = old_mode
+
+                    case W_THEN:
+                        if len(choose_value) < 1 {
+                            return output, stack, fmt.Errorf("Runtime error: THEN without preceding IF")
                         }
                         choose_value = choose_value[:len(choose_value)-1]
                         var old_mode int
@@ -622,24 +617,28 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                     case W_PEEK:
                         if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
-                            return output, stack, fmt.Errorf("Runtime error: word before ? was not a save name")
+                            return output, stack, fmt.Errorf("Runtime error: word before @ or ? was not a save name")
                         }
 
-                        val, ok := m.saves[m.save_ptr][stack[top]]
+                        if save_ptr >= len(m.saves) || save_ptr < 0 {
+                            return output, stack, fmt.Errorf("Runtime error: tried to fetch ptr %d (fetch within literal?)", save_ptr)
+                        }
+
+                        val, ok := m.saves[save_ptr][stack[top]]
                         if ok {
                             stack[top] = val
                         } else {
-                            return output, stack, fmt.Errorf("Runtime error: nothing at address %f at ptr %d", stack[top], m.save_ptr)
+                            return output, stack, fmt.Errorf("Runtime error: nothing at address %f at ptr %d, just %s (last %s)", stack[top], save_ptr, m.saves[save_ptr], m.controls)
                         }
 
                     case W_OLD:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
 
-                        old_ptr := (m.save_ptr + int(pop)) % m.save_len
+                        old_ptr := (save_ptr + int(pop)) % m.save_len
 
                         if old_ptr >= len(m.saves) || old_ptr < 0 {
-                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %d but save_len is %d", old_ptr, m.save_len)
+                            return output, stack, fmt.Errorf("Runtime error: tried to fetch ptr %d (fetch within literal?)", old_ptr)
                         }
 
                         if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
@@ -647,7 +646,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                         val, ok := m.saves[old_ptr][stack[top]]
-                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
+                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, save_ptr, val)
                         if ok {
                             stack[top] = val
                         } else {
@@ -658,10 +657,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         /* Skip back by the number of workers, as we can't guarantee 
                            intervening samples have been filled in yet */
 
-                        old_ptr := (m.save_ptr + m.workers) % m.save_len
+                        old_ptr := (save_ptr + m.workers) % m.save_len
 
                         if old_ptr >= len(m.saves) || old_ptr < 0 {
-                            return output, stack, fmt.Errorf("Runtime error: tried to read ptr %d but save_len is %d", old_ptr, m.save_len)
+                            return output, stack, fmt.Errorf("Runtime error: tried to fetch ptr %d (fetch within literal?)", old_ptr)
                         }
 
                         if stack[top] < 1000 || stack[top] != math.Floor(stack[top]) {
@@ -669,7 +668,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                         val, ok := m.saves[old_ptr][stack[top]]
-                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, m.save_ptr, val)
+                        //fmt.Printf("Looked at address %f at ptr %d (now %d): %s", stack[top], old_ptr, save_ptr, val)
                         if ok {
                             stack[top] = val
                         } else {
@@ -677,21 +676,21 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                     case W_POKE:
-                        if m.save_ptr >= len(m.saves) || m.save_ptr < 0 {
-                            return output, stack, fmt.Errorf("Runtime error: tried to save ptr %d but save_len is %d", m.save_ptr, len(m.saves),m.save_len)
+                        if save_ptr >= len(m.saves) || save_ptr < 0 {
+                            return output, stack, fmt.Errorf("Runtime error: tried to store ptr %d but save_len is %d", save_ptr, m.save_len)
                         }
-                        if m.saves[m.save_ptr] == nil {
-                            m.saves[m.save_ptr] = map[float64]float64{}
+                        if m.saves[save_ptr] == nil {
+                            m.saves[save_ptr] = map[float64]float64{}
                         }
 
-                        _, ok := m.saves[m.save_ptr][stack[top]]
+                        _, ok := m.saves[save_ptr][stack[top]]
                         if ok {
                             return output, stack, fmt.Errorf("Runtime error: address %f already in use", stack[top])                            
                         } else {
                             var plop float64
                             plop, pop, stack = stack[top-1], stack[top], stack[:top-1]
                             top -= 2
-                            m.saves[m.save_ptr][pop] = plop
+                            m.saves[save_ptr][pop] = plop
                         }
 
                     /* Forth words */

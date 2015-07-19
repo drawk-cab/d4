@@ -7,7 +7,7 @@ import (
 )
 
 /* loop length in seconds, will get a click after this, default to 1 day(!) */
-const LOOP = 60 
+const LOOP = 60 * 60 * 24
 
 var SEMITONE = math.Pow(2, 1.0/12)
 var SEC = float64(LOOP)

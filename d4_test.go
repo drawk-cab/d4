@@ -237,6 +237,15 @@ func TestNestedIfElse(t *testing.T) {
     )
 }
 
+func TestNestedIfElse2(t *testing.T) {
+    test( t,  "nested if-else 2",
+              "0 dup 1< if drop 10 else 1> if 12 else 13 then then .",
+              false, []float64{10},
+              false,
+    )
+}
+
+
 func TestZeroIfZero(t *testing.T) {
     test( t,  "zero if zero",
               "0 if 0 else 1 then .",
@@ -264,7 +273,7 @@ func TestNestedChoose(t *testing.T) {
 func TestOscillators(t *testing.T) {
     test( t,  "oscillators",
               "0.25 SIN . 0.25 SAW . 0.25 SQ . 0.25 TR .",
-              false, []float64{1, -0.5, 1, 0},
+              false, []float64{1, 0.5, 1, 0},
               false,
     )
 }
