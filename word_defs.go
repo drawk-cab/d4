@@ -45,6 +45,7 @@ const W_TIMES = 0x05
 const W_DIVIDE = 0x06
 const W_MOD = 0x07
 const W_DMOD = 0x08
+const W_REVERSE_MINUS = 0x09
 
 const W_EQUALS = 0x10
 const W_GREATER = 0x11
@@ -118,6 +119,7 @@ var WORDS = map[string]Word{
     "TRUE":     Word{ "TRUE", W_TRUE,    false, 0 },
     "+":        Word{ "+", W_PLUS,    false, 2 },
     "-":        Word{ "-", W_MINUS,    false, 2 },
+    "~":        Word{ "-", W_REVERSE_MINUS,    false, 2 },
     "*":        Word{ "*", W_TIMES,    false, 2 },
     "/":        Word{ "/", W_DIVIDE,    false, 2 },
     "MOD":      Word{ "MOD", W_MOD,    false, 2 },

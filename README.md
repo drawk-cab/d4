@@ -76,6 +76,7 @@ The word `.` pops the value off the top of the stack and adds it to an output st
 
 * `&` === `DUP .` *i.e.* add the item on TOS to the output stack without removing it from the stack
 
+* `~` === `SWAP -` *i.e.* reverse subtract
 * `NOOP` : noop
 
 * `T` : iteration number

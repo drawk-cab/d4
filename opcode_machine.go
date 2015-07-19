@@ -687,6 +687,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         pop, stack = stack[top], stack[:top]
                         top -= 1
                         stack[top] -= pop
+                    case W_REVERSE_MINUS:
+                        pop, stack = stack[top], stack[:top]
+                        top -= 1
+                        stack[top] = pop - stack[top]
                     case W_TIMES:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
