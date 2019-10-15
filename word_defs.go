@@ -137,6 +137,7 @@ var WORDS = map[string]Word{
 
 
     "DUP":      Word{ "DUP", W_DUP,    false, 1 },
+    "|":        Word{ "DUP", W_DUP,    false, 1 },
     "DDUP":     Word{ "DDUP", W_DDUP,    false, 2 },
     "OVER":     Word{ "OVER", W_OVER,    false, 2 },
     "DROP":     Word{ "DROP", W_DROP,    false, 1 },
@@ -164,11 +165,12 @@ var WORDS = map[string]Word{
     "ON":       Word{ "ON", W_ON,    false, 3 },
 
     "T":        Word{ "T", W_T,    true, 0 },
-    "SIN":      Word{ "SIN", W_SIN,    true, 1 },
-    "SAW":      Word{ "SAW", W_SAW,    true, 1 },
-    "TR":       Word{ "TR", W_TR,    true, 1 },
-    "PULSE":    Word{ "PULSE", W_PULSE,    true, 2 },
-    "SQ":       Word{ "SQ", W_SQ,    true, 1 },
-    "PREWARP":  Word{ "PREWARP", W_PREWARP,  false, 1 },
+    "SIN":      Word{ "SIN", W_SIN,    true, 2 },
+    "SAW":      Word{ "SAW", W_SAW,    true, 2 },
+    "TR":       Word{ "TR", W_TR,    true, 2 },
+    "PULSE":    Word{ "PULSE", W_PULSE,    true, 3 },
+    "SQ":       Word{ "SQ", W_SQ,    true, 2 },
     "NOISE":       Word{ "NOISE", W_NOISE,  false, 0 },
+
+    "PREWARP":  Word{ "PREWARP", W_PREWARP,  false, 1 },
 }

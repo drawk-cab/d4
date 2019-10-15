@@ -24,7 +24,25 @@ func test(t *testing.T, name string, code string, expect_error bool, expect []fl
         test_machine(t, name, machine, expect_error, expect)
     } else {
         if !expect_error {
-            t.Errorf("%s: unexpected compile error: ", name, err)
+            t.Errorf("%s: unexpected compile error: %v", name, err)
+        }
+    }
+}
+
+func test_controls(t *testing.T, name string, code string, controls map[string]float64, expect_error bool, expect []float64, debug bool) {
+    DEBUG = debug
+
+    machine, err := NewMachineString(code, 22050, 1.0, 1, TEST_IMPORTS, 1)
+
+    for k, v := range controls {
+        machine.Set(k, v)
+    }
+
+    if err == nil {
+        test_machine(t, name, machine, expect_error, expect)
+    } else {
+        if !expect_error {
+            t.Errorf("%s: unexpected compile error: %v", name, err)
         }
     }
 }
@@ -64,11 +82,11 @@ func test_machine(t *testing.T, name string, machine Machine, expect_error bool,
         return
     }
 
-    for i, result_i := range result {    
+    for i, result_i := range result {
         if result_i != expect[i] {
             t.Errorf("%s : result %f, want %f", name, result, expect)
             return
-        }   
+        }
     }
 
     return
@@ -96,7 +114,7 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     elapsed := time.Since(then)
 
     if err != nil && !expect_error {
-        t.Errorf("%s (fill32) : unexpected runtime error", name, err)
+        t.Errorf("%s (fill32) : unexpected runtime error: %v", name, err)
     } else {
         if err == nil && expect_error {
             t.Errorf("%s (fill32) : expected an error but didn't get one", name)
@@ -104,7 +122,7 @@ func test_fill32(t *testing.T, name string, filename string, expect_error bool, 
     }
 
     if expect != nil {
-        for i, buf_i := range buf {    
+        for i, buf_i := range buf {
             if buf_i != expect[i] {
                 t.Errorf("%s : result %f, want %f", name, buf, expect)
                 return
@@ -272,8 +290,8 @@ func TestNestedChoose(t *testing.T) {
 
 func TestOscillators(t *testing.T) {
     test( t,  "oscillators",
-              "0.25 SIN . 0.25 SAW . 0.25 SQ . 0.25 TR .",
-              false, []float64{1, 0.5, 1, 0},
+              "0 |0.25 SIN . |0.25 SAW . |0.25 SQ . |0.25 TR . .",
+              false, []float64{1, 0.5, 1, 0, 0},
               false,
     )
 }
@@ -328,7 +346,7 @@ func TestImport(t *testing.T) {
 
 func TestConstant(t *testing.T) {
     test( t,  "constant",
-              ":a 47 dup constant b! 11 +; a. b? b.",
+              ":sub 47 dup constant this! 11 +; sub. this? this.",
               false, []float64{58, 47, 1000},
               false,
     )
@@ -336,7 +354,7 @@ func TestConstant(t *testing.T) {
 
 func TestKeep(t *testing.T) {
     test( t,  "keep",
-              ":a 47 dup keep b 11 +; a. b? b.",
+              ":sub 47 dup keep this 11 +; sub. this? this.",
               false, []float64{58, 47, 1000},
               false,
     )
@@ -344,7 +362,7 @@ func TestKeep(t *testing.T) {
 
 func TestConstantUndefined(t *testing.T) {
     test( t,  "constant-undefined",
-              "50?",
+              "myconstant?",
               true, nil,
               false,
     )
@@ -353,6 +371,32 @@ func TestConstantUndefined(t *testing.T) {
 func TestConstantAlreadyDefined(t *testing.T) {
     test( t,  "constant-already-defined",
               "40 constant a! 80 a!",
+              true, nil,
+              false,
+    )
+}
+
+func TestControl(t *testing.T) {
+    test_controls( t,  "control",
+              "constant mycontrol? mycontrol.",
+              map[string]float64{ "mycontrol": 232 },
+              false, []float64{232, 1000},
+              false,
+    )
+}
+
+func TestControlNotDefined(t *testing.T) {
+    test( t,  "control",
+              "constant mycontrol?",
+              true, nil,
+              false,
+    )
+}
+
+func TestControlAlreadyDefined(t *testing.T) {
+    test_controls( t,  "control-already-defined",
+              "40 constant mycontrol!",
+              map[string]float64{ "mycontrol": 232 },
               true, nil,
               false,
     )

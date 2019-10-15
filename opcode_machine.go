@@ -56,7 +56,7 @@ func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, import
     if (save_len < 2*workers) {
         save_len = 2*workers // must have this many samples stored to be able to figure out delta
     }
-    
+
     return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, nil, upper_imports, workers},
                           1/(LOOP*sample_rate), nil, nil, 1000, nil, nil, nil}
 }
@@ -139,7 +139,7 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
     if err != nil {
         return err
     }
-    
+
     code = append(code, W_EOF)
 
     m.code, err = m.optimize(code)
@@ -175,7 +175,7 @@ func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[str
                     _, exists := words[cur_word]
                     if exists {
                         return words, imports, fmt.Errorf("Scan error: %s has already been defined", cur_word)
-                    } else {                
+                    } else {
                         _, exists := WORDS[cur_word]
                         if exists {
                             return words, imports, fmt.Errorf("Scan error: %s is a built-in word and cannot be redefined", cur_word)
@@ -189,29 +189,21 @@ func (m *OpcodeMachine) read( in io.Reader, words map[string][]string ) (map[str
             case M_CONSTANT:
 
                 words[w] = []string{strconv.Itoa(m.save_addr)} // everything is a string at this point
+
                 m.control_keys[w] = float64(m.save_addr)
-                _, exists := m.controls[w]
-                if !exists {
-                    m.controls[w] = 0
-                }
 
                 if DEBUG {
-                    fmt.Println("Assigning addr",m.save_addr,"to control",w," (current value",m.controls[w],")")
+                    fmt.Println("Assigning addr",m.save_addr,"to control",w," (current controls are ",m.controls,")")
                 }
-
                 m.save_addr += 1
-
                 words[cur_word] = append(words[cur_word], w)
-
                 mode = mode[:len(mode)-1]
 
             case M_KEEP: // KEEP x === CONSTANT x !
 
                 words[w] = []string{strconv.Itoa(m.save_addr)}
                 m.save_addr += 1
-
                 words[cur_word] = append(words[cur_word], w, "!")
-
                 mode = mode[:len(mode)-1]
 
             case M_DEF:
@@ -374,7 +366,7 @@ func (m *OpcodeMachine) optimize( code []float64 ) ([]float64, error) {
                     case W_END_LITERAL:
                         return output, fmt.Errorf("Optimize error: ] found outside literal")
                     default:
-                        output = append(output, w)                
+                        output = append(output, w)
                 }
         }
     }
@@ -431,7 +423,7 @@ func (m *OpcodeMachine) fill32_parallel( buf []float32 ) error {
 func (m *OpcodeMachine) fill32_single( buf []float32 ) error {
     var output []float64
     var err error
-    
+
     for i := range buf {
 
         output, err = m.Run()
@@ -460,8 +452,11 @@ func (m *OpcodeMachine) Run() ([]float64, error) {
     save_ptr := m.save_len - int(m.iter % int64(m.save_len))
 
     m.saves[save_ptr] = map[float64]float64{}
-    for k,v := range m.controls {
-        m.saves[save_ptr][m.control_keys[k]] = v
+    for k,v := range m.control_keys {
+      control_value, ok := m.controls[k]
+      if ok {
+        m.saves[save_ptr][v] = control_value
+      }
     }
 
     output, stack, err := m.RunCode(m.code, m.iter)
@@ -491,7 +486,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
     output := []float64{}
     stack := []float64{}
-    
+
     save_ptr := m.save_len - int(m.iter % int64(m.save_len))
 
     _, phase := math.Modf( float64(m.iter) * m.step )
@@ -499,7 +494,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
     var err error
     var pop float64
     var w_info Word
-    
+
     choose_value := []int{}
     code_ptr := 0
     top := -1
@@ -534,7 +529,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
             case M_NORMAL:
                 if w_info.needs > top+1 {
-                    return output, stack, fmt.Errorf("Runtime error: %s needs %d items on stack, got %s", w_info.name, w_info.needs, stack)
+                    return output, stack, fmt.Errorf("Runtime error: %s needs %d items on stack, got %v", w_info.name, w_info.needs, stack)
                 }
                 switch w {
 
@@ -628,7 +623,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         if ok {
                             stack[top] = val
                         } else {
-                            return output, stack, fmt.Errorf("Runtime error: nothing at address %f at ptr %d, just %s (last %s)", stack[top], save_ptr, m.saves[save_ptr], m.controls)
+                            return output, stack, fmt.Errorf("Runtime error: nothing at address %f at ptr %d, just %v (last %v)", stack[top], save_ptr, m.saves[save_ptr], m.controls)
                         }
 
                     case W_OLD:
@@ -654,7 +649,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                     case W_DELTA:
-                        /* Skip back by the number of workers, as we can't guarantee 
+                        /* Skip back by the number of workers, as we can't guarantee
                            intervening samples have been filled in yet */
 
                         old_ptr := (save_ptr + m.workers) % m.save_len
@@ -685,12 +680,15 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                         _, ok := m.saves[save_ptr][stack[top]]
                         if ok {
-                            return output, stack, fmt.Errorf("Runtime error: address %f already in use", stack[top])                            
+                            return output, stack, fmt.Errorf("Runtime error: address %f already set in %v", stack[top], m.saves[save_ptr])
                         } else {
                             var plop float64
                             plop, pop, stack = stack[top-1], stack[top], stack[:top-1]
                             top -= 2
                             m.saves[save_ptr][pop] = plop
+                            if DEBUG {
+                              fmt.Printf("Poked %v:%v, now have %v\n", pop, plop, m.saves[save_ptr])
+                            }
                         }
 
                     /* Forth words */
@@ -737,7 +735,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         result, remainder := math.Modf( stack[top-1] / stack[top] )
                         stack[top-1] = remainder * stack[top]
                         stack[top] = result
-        
+
                     case W_EQUALS:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
@@ -823,10 +821,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         stack[top], stack[top-1], stack[top-2] = stack[top-2], stack[top], stack[top-1]
 
                     case W_LOOP:
-                        // TODO 
+                        // TODO
 
                     /* Useful words */
-        
+
                     case W_MAX:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
@@ -840,16 +838,16 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     /* musical words */
 
                     case W_HZ:
-                        stack[top] *= SEC * phase
+                        stack[top] *= HZ
 
                     case W_BPM:
-                        stack[top] *= BPM * phase
+                        stack[top] *= BPM
 
                     case W_S:
                         stack[top] *= m.sample_rate
 
                     case W_T:
-                        stack = append(stack, float64(m.iter))
+                        stack = append(stack, phase)
                         top += 1
 
                     case W_ON:
@@ -886,27 +884,33 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     case W_LOW:
                         stack[top] /= 2
 
-                    /* oscillators */
+                    /* oscillators : phase(LOOP) freq -- value */
 
                     case W_SIN:
-                        _, frac := math.Modf(stack[top])
+                        _, frac := math.Modf(stack[top] * stack[top-1])
+                        stack = stack[:top]
+                        top -= 1
                         stack[top] = math.Sin(frac * 2 * math.Pi)
 
                     case W_SAW:
-                        stack[top] = 1 - math.Mod(stack[top]* 2, 2)
+                        stack[top-1] = 1 - math.Mod(stack[top] * stack[top-1] * 2, 2)
+                        stack = stack[:top]
+                        top -= 1
 
                     case W_TR:
-                        _, frac := math.Modf(stack[top])
+                        _, frac := math.Modf(stack[top] * stack[top-1])
+                        stack = stack[:top]
+                        top -= 1
                         if frac < 0.5 {
                             stack[top] = frac * 4 - 1
                         } else {
                             stack[top] = 3 - frac * 4
                         }
 
-                    case W_PULSE:
-                        pop, stack = stack[top], stack[:top]
-                        top -= 1
-                        _, frac := math.Modf(stack[top])
+                    case W_PULSE: // width phase(LOOP) freq -- value
+                        plop, pop, stack := stack[top-1], stack[top], stack[:top-1]
+                        top -= 2
+                        _, frac := math.Modf(pop * plop)
                         if frac < pop {
                             stack[top] = 1
                         } else {
@@ -914,7 +918,9 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
 
                     case W_SQ:
-                        _, frac := math.Modf(stack[top])
+                        _, frac := math.Modf(stack[top] * stack[top-1])
+                        stack = stack[:top]
+                        top -= 1
                         if frac < 0.5 {
                             stack[top] = 1
                         } else {
@@ -932,7 +938,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
 
                     default:
-                        return output, stack, fmt.Errorf("Runtime error: unknown opcode %d", w)
+                        return output, stack, fmt.Errorf("Runtime error: unknown opcode %v", w)
                 }
         }
 
