@@ -46,6 +46,7 @@ const W_DIVIDE = 0x06
 const W_MOD = 0x07
 const W_DMOD = 0x08
 const W_REVERSE_MINUS = 0x09
+const W_REVERSE_DIVIDE = 0x0a
 
 const W_EQUALS = 0x10
 const W_GREATER = 0x11
@@ -64,6 +65,7 @@ const W_NIP = 0x24
 const W_TUCK = 0x25
 const W_SWAP = 0x26
 const W_ROT = 0x27
+const W_HIDE = 0x28
 
 const W_HZ = 0x30
 const W_BPM = 0x31
@@ -123,6 +125,7 @@ var WORDS = map[string]Word{
     "~":        Word{ "-", W_REVERSE_MINUS,    false, 2 },
     "*":        Word{ "*", W_TIMES,    false, 2 },
     "/":        Word{ "/", W_DIVIDE,    false, 2 },
+    "\\":       Word{ "\\", W_REVERSE_DIVIDE,    false, 2 },
     "MOD":      Word{ "MOD", W_MOD,    false, 2 },
     "DMOD":     Word{ "DMOD", W_DMOD,    false, 2 },
 
@@ -145,6 +148,7 @@ var WORDS = map[string]Word{
     "TUCK":     Word{ "TUCK", W_TUCK,    false, 1 },
     "SWAP":     Word{ "SWAP", W_SWAP,    false, 2 },
     "ROT":      Word{ "ROT", W_ROT,    false, 3 },
+    "HIDE":      Word{ "HIDE", W_HIDE,    false, 3 },
 
     "HZ":       Word{ "HZ", W_HZ,    true, 1 },
     "BPM":      Word{ "BPM", W_BPM,    true, 1 },

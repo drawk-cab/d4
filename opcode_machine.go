@@ -723,6 +723,13 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         }
                         top -= 1
                         stack[top] /= pop
+                    case W_REVERSE_DIVIDE:
+                        pop, stack = stack[top], stack[:top]
+                        top -= 1
+                        if stack[top] == 0 {
+                            return output, stack, fmt.Errorf("Runtime error: divide by zero")
+                        }
+                        stack[top] = pop / stack[top]
                     case W_MOD:
                         pop, stack = stack[top], stack[:top]
                         top -= 1
@@ -820,6 +827,9 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     case W_ROT:
                         stack[top], stack[top-1], stack[top-2] = stack[top-2], stack[top], stack[top-1]
 
+                    case W_HIDE:
+                        stack[top], stack[top-1], stack[top-2] = stack[top-1], stack[top-2], stack[top]
+
                     case W_LOOP:
                         // TODO
 
@@ -844,7 +854,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         stack[top] *= BPM
 
                     case W_S:
-                        stack[top] *= m.sample_rate
+                        stack[top] /= HZ
 
                     case W_T:
                         stack = append(stack, phase)
@@ -907,10 +917,10 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                             stack[top] = 3 - frac * 4
                         }
 
-                    case W_PULSE: // width phase(LOOP) freq -- value
+                    case W_PULSE: // phase(LOOP) freq width -- value
                         plop, pop, stack := stack[top-1], stack[top], stack[:top-1]
                         top -= 2
-                        _, frac := math.Modf(pop * plop)
+                        _, frac := math.Modf(stack[top] * plop)
                         if frac < pop {
                             stack[top] = 1
                         } else {
