@@ -489,7 +489,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
     save_ptr := m.save_len - int(m.iter % int64(m.save_len))
 
-    _, phase := math.Modf( float64(m.iter) * m.step )
+    _, phase := math.Modf( float64(m.iter) * m.step * 2 * math.Pi )
 
     var err error
     var pop float64
@@ -854,7 +854,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         stack[top] *= BPM
 
                     case W_S:
-                        stack[top] /= HZ
+                        stack[top] /= BPM*60
 
                     case W_T:
                         stack = append(stack, phase)
@@ -894,44 +894,37 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                     case W_LOW:
                         stack[top] /= 2
 
-                    /* oscillators : phase(LOOP) freq -- value */
+                    /* oscillators */
 
                     case W_SIN:
-                        _, frac := math.Modf(stack[top] * stack[top-1])
-                        stack = stack[:top]
-                        top -= 1
-                        stack[top] = math.Sin(frac * 2 * math.Pi)
+                        stack[top] = math.Sin(stack[top])
 
                     case W_SAW:
-                        stack[top-1] = 1 - math.Mod(stack[top] * stack[top-1] * 2, 2)
-                        stack = stack[:top]
-                        top -= 1
+                        _, frac := math.Modf(stack[top])
+                        stack[top] = math.Floor(frac*4) / 4
+                        //stack[top] = 1 - math.Mod(stack[top] * 2, 2)
 
                     case W_TR:
-                        _, frac := math.Modf(stack[top] * stack[top-1])
-                        stack = stack[:top]
-                        top -= 1
-                        if frac < 0.5 {
-                            stack[top] = frac * 4 - 1
+                        frac := math.Mod(stack[top] / math.Pi, 2)
+                        if frac < 1 {
+                            stack[top] = frac * 2 - 1
                         } else {
-                            stack[top] = 3 - frac * 4
+                            stack[top] = 3 - frac * 2
                         }
 
-                    case W_PULSE: // phase(LOOP) freq width -- value
-                        plop, pop, stack := stack[top-1], stack[top], stack[:top-1]
-                        top -= 2
-                        _, frac := math.Modf(stack[top] * plop)
-                        if frac < pop {
+                    case W_PULSE: // width angle -- value
+                        width, frac := stack[top-1], math.Mod(stack[top] / math.Pi, 2)
+                        stack = stack[:top]
+                        top -= 1
+                        if frac < width {
                             stack[top] = 1
                         } else {
                             stack[top] = -1
                         }
 
                     case W_SQ:
-                        _, frac := math.Modf(stack[top] * stack[top-1])
-                        stack = stack[:top]
-                        top -= 1
-                        if frac < 0.5 {
+                        frac := math.Mod(stack[top] / math.Pi, 2)
+                        if frac < 1 {
                             stack[top] = 1
                         } else {
                             stack[top] = -1

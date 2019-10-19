@@ -169,11 +169,11 @@ var WORDS = map[string]Word{
     "ON":       Word{ "ON", W_ON,    false, 3 },
 
     "T":        Word{ "T", W_T,    true, 0 },
-    "SIN":      Word{ "SIN", W_SIN,    true, 2 },
-    "SAW":      Word{ "SAW", W_SAW,    true, 2 },
-    "TR":       Word{ "TR", W_TR,    true, 2 },
-    "PULSE":    Word{ "PULSE", W_PULSE,    true, 3 },
-    "SQ":       Word{ "SQ", W_SQ,    true, 2 },
+    "SIN":      Word{ "SIN", W_SIN,    true, 1 },
+    "SAW":      Word{ "SAW", W_SAW,    true, 1 },
+    "TR":       Word{ "TR", W_TR,    true, 1 },
+    "PULSE":    Word{ "PULSE", W_PULSE,    true, 2 },
+    "SQ":       Word{ "SQ", W_SQ,    true, 1 },
     "NOISE":       Word{ "NOISE", W_NOISE,  false, 0 },
 
     "PREWARP":  Word{ "PREWARP", W_PREWARP,  false, 1 },
