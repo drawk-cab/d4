@@ -2,13 +2,14 @@ package d4
 
 import "io"
 
+
 type MachineData struct {
     iter int64
     sample_rate float64
     save_len int
     clip float64
     controls map[string]float64
-    imports map[string]string
+    imports func(string) (string, error)
     workers int
 }
 

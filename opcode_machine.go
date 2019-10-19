@@ -43,13 +43,7 @@ type OpcodeMachine struct {
     opcode_info map[float64]Word
 }
 
-func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, imports map[string]string, workers int ) *OpcodeMachine {
-
-    // import names are case insensitive and stored as capitals
-    upper_imports := map[string]string{}
-    for name, code := range imports {
-        upper_imports[strings.ToUpper(name)] = code
-    }
+func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, imports func(string) (string, error), workers int ) *OpcodeMachine {
 
     save_len := int(save_s * sample_rate)
 
@@ -57,7 +51,7 @@ func NewOpcodeMachine( sample_rate float64, save_s float64, clip float64, import
         save_len = 2*workers // must have this many samples stored to be able to figure out delta
     }
 
-    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, nil, upper_imports, workers},
+    return &OpcodeMachine{MachineData{0, sample_rate, save_len, clip, nil, imports, workers},
                           1/(LOOP*sample_rate), nil, nil, 1000, nil, nil, nil}
 }
 
@@ -106,7 +100,12 @@ func (m *OpcodeMachine) Program( in io.Reader ) error {
 
     for _, name := range need_imports {
 
-        in = strings.NewReader( m.imports[name] )
+        code, err := m.imports(name)
+        if err != nil {
+            return err
+        }
+
+        in = strings.NewReader( code )
         new_words, new_imports, err := m.read( in, nil )
 
         if err != nil {
@@ -630,7 +629,7 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
                         pop, stack = stack[top], stack[:top]
                         top -= 1
 
-                        old_ptr := (save_ptr + int(pop)) % m.save_len
+                        old_ptr := (save_ptr + int(pop*m.sample_rate*BPM*60)) % m.save_len
 
                         if old_ptr >= len(m.saves) || old_ptr < 0 {
                             return output, stack, fmt.Errorf("Runtime error: tried to fetch ptr %d (fetch within literal?)", old_ptr)
@@ -829,6 +828,9 @@ func (m *OpcodeMachine) RunCode(code []float64, iter int64) ([]float64, []float6
 
                     case W_HIDE:
                         stack[top], stack[top-1], stack[top-2] = stack[top-1], stack[top-2], stack[top]
+
+                    case W_FIDDLE:
+                        stack[top-1], stack[top-2] = stack[top-2], stack[top-1]
 
                     case W_LOOP:
                         // TODO

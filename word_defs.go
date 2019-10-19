@@ -66,6 +66,7 @@ const W_TUCK = 0x25
 const W_SWAP = 0x26
 const W_ROT = 0x27
 const W_HIDE = 0x28
+const W_FIDDLE = 0x29
 
 const W_HZ = 0x30
 const W_BPM = 0x31
@@ -148,7 +149,8 @@ var WORDS = map[string]Word{
     "TUCK":     Word{ "TUCK", W_TUCK,    false, 1 },
     "SWAP":     Word{ "SWAP", W_SWAP,    false, 2 },
     "ROT":      Word{ "ROT", W_ROT,    false, 3 },
-    "HIDE":      Word{ "HIDE", W_HIDE,    false, 3 },
+    "HIDE":     Word{ "HIDE", W_HIDE,    false, 3 },
+    "FIDDLE":   Word{ "FIDDLE", W_FIDDLE, false, 3 },
 
     "HZ":       Word{ "HZ", W_HZ,    true, 1 },
     "BPM":      Word{ "BPM", W_BPM,    true, 1 },

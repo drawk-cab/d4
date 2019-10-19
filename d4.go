@@ -16,12 +16,12 @@ var BPM = float64(LOOP / 120 / math.Pi)
 var DEBUG = false
 
 func NewMachineString(in string, sample_rate float64, save_s float64,
-                      clip float64, imports map[string]string, workers int) (Machine, error) {
+                      clip float64, imports func(string) (string, error), workers int) (Machine, error) {
     return NewMachine(strings.NewReader(in), sample_rate, save_s, clip, imports, workers)
 }
 
 func NewMachine(in io.Reader, sample_rate float64, save_s float64,
-                clip float64, imports map[string]string, workers int) (Machine, error) {
+                clip float64, imports func(string) (string, error), workers int) (Machine, error) {
     s := NewOpcodeMachine(sample_rate, save_s, clip, imports, workers)
     s.Init(nil)
     err := s.Program(in)
